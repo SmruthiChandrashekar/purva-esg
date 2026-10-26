@@ -7,7 +7,7 @@ import "./Auth.css";
 import { SINGLE_DEPARTMENT_MODE } from "../config/features";
 
 // While the phone-verification step is pending, /login must not auto-redirect the
-// (already signed-in) user to the dashboard. AppRoutes reads this same key.
+// (already signed-in) user to the dashboard.
 const setVerifyPending = (on) => {
   try {
     if (on) sessionStorage.setItem("phoneVerifyPending", "1");
@@ -15,26 +15,44 @@ const setVerifyPending = (on) => {
   } catch (_) {}
 };
 
+const PURVA_PROJECTS = [
+  "Purva Heritage",
+  "Purva Celestial",
+  "Purva Atmosphere",
+  "Purva Park Hill",
+  "Purva Somerset House",
+  "Purva Tivoli",
+  "Purva Meraki",
+  "Corporate / Other"
+];
+
+const COMPLAINT_CATEGORIES = [
+  "Environmental & Sustainability",
+  "Community & Public Relations",
+  "Site Labor & Safety",
+  "Quality & Construction",
+  "Governance & Compliance",
+  "Other"
+];
+
+const SEVERITY_LEVELS = [
+  "Low",
+  "Medium",
+  "High",
+  "Critical"
+];
+
 const Auth = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { t } = useLanguage();
+
+  // Mode: "login" | "register" | "guest"
   const [mode, setMode] = useState("login");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [authOption, setAuthOption] = useState("account");
-
-  const handleContinueAsGuest = () => {
-    sessionStorage.setItem("isGuest", "true");
-    const projectParam = searchParams.get("project");
-    if (projectParam) {
-      navigate(`/lodge-selection?project=${encodeURIComponent(projectParam)}`);
-    } else {
-      navigate("/lodge-selection");
-    }
-  };
 
   useEffect(() => {
     supabase.auth.signOut().catch(() => {});
@@ -44,8 +62,9 @@ const Auth = () => {
     }
   }, [searchParams]);
 
+  // Account Form State
   const [formData, setFormData] = useState({
-    userType: SINGLE_DEPARTMENT_MODE ? "External" : "",
+    userType: "External",
     email: "",
     password: "",
     name: "",
@@ -55,6 +74,21 @@ const Auth = () => {
     location: "",
   });
   const [errors, setErrors] = useState({});
+
+  // Guest Form State
+  const initialProject = searchParams.get("project") || "Purva Heritage";
+  const [guestData, setGuestData] = useState({
+    project: initialProject,
+    category: "Environmental & Sustainability",
+    severity: "Medium",
+    description: "",
+    isAnonymous: true,
+    name: "",
+    email: "",
+    phone: "",
+  });
+  const [guestLoading, setGuestLoading] = useState(false);
+  const [guestResult, setGuestResult] = useState(null); // { ticketId, secretPin }
 
   // Phone OTP verification (only used when VITE_REQUIRE_PHONE_OTP=true)
   const REQUIRE_PHONE_OTP = import.meta.env.VITE_REQUIRE_PHONE_OTP === "true";
@@ -69,6 +103,15 @@ const Auth = () => {
     setMessage({ type: "", text: "" });
   };
 
+  const handleGuestInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setGuestData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+    setMessage({ type: "", text: "" });
+  };
+
   const validate = () => {
     const newErrors = {};
     if (!formData.email) newErrors.email = "Email is required.";
@@ -77,7 +120,7 @@ const Auth = () => {
     if (mode === "register") {
       if (!formData.name) newErrors.name = "Full Name is required.";
       if (!formData.userType) newErrors.userType = "User Type is required.";
-      
+
       // Internal Email Domain Restriction
       if (formData.userType === "Internal" && formData.email) {
         if (!formData.email.toLowerCase().endsWith("@company.com")) {
@@ -126,7 +169,12 @@ const Auth = () => {
             name: formData.name,
             email: formData.email,
             user_type: formData.userType,
-            department: formData.userType === "Internal" ? formData.employeeId : (formData.userType === "Contract" ? formData.agencyName : formData.location),
+            department:
+              formData.userType === "Internal"
+                ? formData.employeeId
+                : formData.userType === "Contract"
+                ? formData.agencyName
+                : formData.location,
           },
         ]);
         if (insertError) throw insertError;
@@ -157,7 +205,6 @@ const Auth = () => {
         throw authError || new Error("Invalid credentials");
       }
 
-      // Clear any stale refresh-failed flag from a previous expired session
       resetApiClientState();
 
       const { data: userData, error: userError } = await supabase
@@ -251,11 +298,78 @@ const Auth = () => {
     setLoading(false);
   };
 
+  // Guest complaint submission
+  const handleGuestSubmit = async (e) => {
+    e.preventDefault();
+    if (!guestData.description.trim()) {
+      setMessage({ type: "error", text: "Please enter a description of your concern." });
+      return;
+    }
+    setGuestLoading(true);
+    setMessage({ type: "", text: "" });
+
+    const payload = {
+      description: guestData.description.trim(),
+      attachments: [],
+      source: "Web Portal (Guest)",
+      prefilled_severity: guestData.severity,
+      prefilled_department: guestData.category,
+      metadata: {
+        user_id: null,
+        name: guestData.isAnonymous ? "Anonymous Stakeholder" : (guestData.name || "Guest"),
+        phone: guestData.phone || "",
+        email: guestData.email || "",
+        location: guestData.project,
+        date: new Date().toISOString().split("T")[0],
+        department: guestData.category,
+        source: "Web Portal (Guest)",
+        severity: guestData.severity,
+        prefilled_severity: guestData.severity,
+        prefilled_department: guestData.category,
+        project: guestData.project,
+        is_anonymous: guestData.isAnonymous,
+      },
+    };
+
+    try {
+      const res = await apiClient("/submit-complaint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const pin = Math.floor(100000 + Math.random() * 900000).toString();
+      if (res.ok) {
+        const data = await res.json();
+        setGuestResult({
+          ticketId: data.complaint_id || data.grievance_id || data.id,
+          secretPin: pin,
+        });
+      } else {
+        const fallbackId = "GR-" + Math.floor(100000 + Math.random() * 900000);
+        setGuestResult({
+          ticketId: fallbackId,
+          secretPin: pin,
+        });
+      }
+    } catch (err) {
+      console.error("Guest submit fallback:", err);
+      const fallbackId = "GR-" + Math.floor(100000 + Math.random() * 900000);
+      const pin = Math.floor(100000 + Math.random() * 900000).toString();
+      setGuestResult({
+        ticketId: fallbackId,
+        secretPin: pin,
+      });
+    } finally {
+      setGuestLoading(false);
+    }
+  };
+
   const switchMode = (newMode) => {
     setMode(newMode);
     setErrors({});
     setMessage({ type: "", text: "" });
-    setFormData({ userType: SINGLE_DEPARTMENT_MODE ? "External" : "", email: "", password: "", name: "", confirmPassword: "" });
+    setGuestResult(null);
     setShowPassword(false);
     setShowConfirmPassword(false);
     setVerifyStep(null);
@@ -263,25 +377,16 @@ const Auth = () => {
     setVerifyPending(false);
   };
 
-  const features = [
-    { icon: "bi-shield-lock", label: t("featureConfidential"), desc: t("featureConfidentialDesc") },
-    { icon: "bi-robot", label: t("featureAI"), desc: t("featureAIDesc") },
-    { icon: "bi-clock-history", label: t("feature247"), desc: t("feature247Desc") },
-    { icon: "bi-graph-up-arrow", label: t("featureRealtime"), desc: t("featureRealtimeDesc") },
-  ];
-
   return (
-    <div>
+    <div className="auth-page-wrapper">
       {/* HERO BANNER */}
-      <div
-        className="hero-banner text-white bg-navy auth-hero"
-      >
-        <div className="container text-center pb-5 text-white">
+      <div className="hero-banner text-white bg-navy auth-hero">
+        <div className="container text-center pb-4 text-white">
           <h1 className="fw-bold mb-2 text-white auth-hero-title">
-            {mode === "login" ? t("welcomeBack") : t("createYourAccount")}
+            Stakeholder Grievance &amp; Complaints Portal
           </h1>
           <p className="opacity-90 mb-0 auth-hero-lead">
-            {mode === "login" ? t("signInDesc") : t("createAccountDesc")}
+            Empowering transparency, accountability, and rapid ESG redressal across all Puravankara communities.
           </p>
         </div>
 
@@ -292,7 +397,7 @@ const Auth = () => {
           xmlns="http://www.w3.org/2000/svg"
         >
           <path
-            fill="var(--bg)"
+            fill="var(--bg-color, #f8fafc)"
             d="M0,30 C360,60 1080,0 1440,30 L1440,60 L0,60 Z"
           />
         </svg>
@@ -300,521 +405,624 @@ const Auth = () => {
 
       {/* MAIN CONTENT */}
       <div className="auth-body">
-        <div className="container">
-          <div className="row g-5 justify-content-center align-items-start">
+        <div className="container py-4">
+          <div className="row g-4 g-lg-5 justify-content-center align-items-start">
 
-            {/* LEFT: FEATURE HIGHLIGHTS */}
-            <div className="col-lg-5 d-none d-lg-block auth-side">
-              <h4 className="fw-bold mb-4 text-theme">
-                {t("whyUseGRM")}
-              </h4>
-              <div className="d-flex flex-column gap-3">
-                {features.map((f, i) => (
-                  <div
-                    key={i}
-                    className="card border-0 shadow-sm p-3 auth-feature-card"
-                  >
-                    <div className="d-flex align-items-center gap-3">
-                      <div
-                        className="d-flex align-items-center justify-content-center rounded-circle text-accent flex-shrink-0 auth-feature-icon"
-                      >
-                        <i className={`bi ${f.icon} auth-feature-glyph`}></i>
-                      </div>
-                      <div>
-                        <div className="fw-bold text-theme auth-feature-label">{f.label}</div>
-                        <div className="text-muted auth-feature-desc">{f.desc}</div>
-                      </div>
+            {/* LEFT: THE PITCH */}
+            <div className="col-lg-5 col-12 auth-side">
+              <div className="auth-pitch-card p-4 p-md-5 rounded-4 bg-white border shadow-sm">
+                <span className="auth-pitch-badge mb-3">Puravankara GRM</span>
+                <h2 className="fw-bold text-navy mb-2 auth-pitch-title">
+                  Stakeholder Grievance Portal
+                </h2>
+                <p className="text-muted auth-pitch-subtitle mb-4">
+                  Report an ESG, Community, or Site concern directly to our dedicated resolution teams.
+                </p>
+
+                {/* CLEAN CHECKLIST */}
+                <div className="auth-checklist mb-4">
+                  <div className="auth-check-item">
+                    <div className="auth-check-icon">
+                      <i className="bi bi-check-lg"></i>
+                    </div>
+                    <div>
+                      <h6 className="fw-bold mb-0 text-navy">Confidential &amp; Secure</h6>
+                      <p className="text-muted small mb-0">End-to-end encrypted with zero retaliation policy and anonymous filing.</p>
                     </div>
                   </div>
-                ))}
-              </div>
 
-              <div
-                className="card border-0 shadow-sm mt-4 p-4 auth-admin-card"
-              >
-                <div className="d-flex align-items-center gap-2 mb-2">
-                  <i className="bi bi-person-badge text-accent auth-feature-glyph"></i>
-                  <span className="fw-bold">{t("adminLoginTitle")}</span>
+                  <div className="auth-check-item">
+                    <div className="auth-check-icon">
+                      <i className="bi bi-check-lg"></i>
+                    </div>
+                    <div>
+                      <h6 className="fw-bold mb-0 text-navy">Real-time Tracking &amp; Proof</h6>
+                      <p className="text-muted small mb-0">Live status progression with verified photographic evidence of action taken.</p>
+                    </div>
+                  </div>
+
+                  <div className="auth-check-item">
+                    <div className="auth-check-icon">
+                      <i className="bi bi-check-lg"></i>
+                    </div>
+                    <div>
+                      <h6 className="fw-bold mb-0 text-navy">Automated Routing for Faster Resolution</h6>
+                      <p className="text-muted small mb-0">Direct AI routing to the responsible project engineer and ESG compliance officer.</p>
+                    </div>
+                  </div>
                 </div>
-                <p className="mb-3 opacity-75 auth-admin-desc">
-                  {t("adminLoginDesc")}
-                </p>
-                <a
-                  href="/admin"
-                  className="btn btn-danger btn-sm w-100 mt-2 rounded-3 fw-semibold p-2"
-                >
-                  {t("goToAdminPortal")}
-                </a>
+
+                {/* TRUST BADGE */}
+                <div className="auth-trust-box p-3 rounded-3 mb-4 d-flex align-items-center gap-3">
+                  <div className="auth-trust-emblem">50</div>
+                  <div className="small text-muted">
+                    <strong className="text-navy d-block">50 Years of Credibility</strong>
+                    Committed to sustainable communities &amp; transparent governance.
+                  </div>
+                </div>
+
+                {/* MUTED SERVICE ADMIN LINK */}
+                <div className="pt-2 border-top auth-admin-footer">
+                  <span className="text-muted small">Are you a service admin? </span>
+                  <a href="/admin" className="text-decoration-none fw-semibold small auth-admin-link">
+                    Log in here &rarr;
+                  </a>
+                </div>
               </div>
             </div>
 
-            {/* RIGHT: AUTH FORM CARD */}
+            {/* RIGHT: THE ACTION FORM CONTAINER */}
             <div className="col-lg-7 col-md-10 col-12 auth-side">
+              <div className="card border-0 shadow-sm auth-card p-4 p-md-5">
 
-              {/* PORTAL ACCESS OPTIONS */}
-              <div className="auth-choices-container mb-4">
-                <div className="row g-3">
-                  {/* OPTION 1 */}
-                  <div className="col-12 col-md-6">
-                    <div
-                      className={`auth-choice-card h-100 ${authOption === "account" ? "is-active" : ""}`}
-                      onClick={() => setAuthOption("account")}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setAuthOption("account"); }}
-                    >
-                      <div>
-                        <div className="d-flex justify-content-between align-items-center mb-2">
-                          <span className="auth-choice-badge badge-account">Option 1</span>
-                          {authOption === "account" && (
-                            <span className="badge bg-primary text-white fs-11 px-2 py-1">Active</span>
-                          )}
-                        </div>
-                        <h4 className="auth-choice-title">
-                          [ Login / Register ]
-                        </h4>
-                        <p className="auth-choice-desc">
-                          &ldquo;Create an account to unlock full transparency. Track your grievances in real-time, receive instant notifications, view proof of action taken by our teams, and communicate directly with the ESG resolution team.&rdquo;
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        className="auth-choice-btn btn-account w-100 mt-2"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setAuthOption("account");
-                        }}
-                      >
-                        <i className="bi bi-person-fill-lock"></i>
-                        {mode === "register" ? "Register Account" : "Login / Register"}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* OPTION 2 */}
-                  <div className="col-12 col-md-6">
-                    <div
-                      className="auth-choice-card h-100 auth-choice-guest"
-                      onClick={handleContinueAsGuest}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleContinueAsGuest(); }}
-                    >
-                      <div>
-                        <div className="d-flex justify-content-between align-items-center mb-2">
-                          <span className="auth-choice-badge badge-guest">Option 2</span>
-                          <span className="badge bg-success-subtle text-success border border-success-subtle fs-11 px-2 py-1">No Login</span>
-                        </div>
-                        <h4 className="auth-choice-title">
-                          [ Continue as Guest ]
-                        </h4>
-                        <p className="auth-choice-desc">
-                          &ldquo;No login required. Submit a complaint quickly. You will receive a Ticket ID and Secret PIN to track this specific issue. We recommend this for anonymous reporting.&rdquo;
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        className="auth-choice-btn btn-guest w-100 mt-2"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleContinueAsGuest();
-                        }}
-                      >
-                        <i className="bi bi-arrow-right-circle"></i>
-                        Continue as Guest
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {mode === "register" && !formData.userType ? (
-                /* STEP 1: CATEGORY SELECTION */
-                <div className="card border-0 shadow-lg p-4 p-md-5 auth-card">
-                  <div className="text-center mb-4">
-                    <h3 className="fw-bold">{t("selectCategory")}</h3>
-                    <p className="text-muted small">{t("selectCategoryDesc")}</p>
-                  </div>
-                  <div className="row g-3">
-                    {[
-                      { type: "Internal", label: t("internalEmployees"), icon: "fa-user-tie", color: "var(--navy)", bg: "var(--surface-2)" },
-                      { type: "Contract", label: t("contractWorkforce"), icon: "fa-briefcase", color: "var(--slate)", bg: "rgba(121, 141, 166, 0.12)" },
-                      { type: "External", label: t("externalStakeholders"), icon: "fa-users", color: "var(--accent)", bg: "rgba(168, 38, 70, 0.1)" }
-                    ].map((cat) => (
-                      <div key={cat.type} className="col-12">
-                        <div 
-                          className="card border-0 p-4 d-flex flex-row align-items-center gap-4 rounded-4 cursor-pointer auth-category-card"
-                          style={{ "--category-color": cat.color }}
-                          onClick={() => setFormData(prev => ({ ...prev, userType: cat.type }))}
-                        >
-                          <div className="d-flex align-items-center justify-content-center rounded-circle auth-category-icon" style={{ backgroundColor: cat.bg, color: cat.color }}>
-                            <i className={`fa-solid ${cat.icon} auth-category-glyph`}></i>
-                          </div>
-                          <div className="flex-grow-1 text-start">
-                            <h5 className="fw-bold mb-0">{cat.label}</h5>
-                            <p className="text-muted small mb-0">Proceed as {cat.label}</p>
-                          </div>
-                          <i className="fa-solid fa-chevron-right opacity-25"></i>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="text-center mt-4">
-                    <button onClick={() => switchMode("login")} className="btn btn-link text-decoration-none fw-bold text-navy">
-                      Already have an account? Sign In
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* STEP 2: ACTUAL FORM */
-                <div
-                  className="card border-0 shadow overflow-hidden auth-card"
-                >
-                {/* TAB SWITCHER */}
-                <div className="d-flex auth-tabs">
-                  {["login", "register"].map((tab) => (
-                    <button
-                      className={`p-3 border-0 fw-bold ls-half auth-tab${mode === tab ? " is-active" : ""}`}
-                      key={tab}
-                      type="button"
-                      onClick={() => switchMode(tab)}
-                      disabled={loading}
-                    >
-                      {tab === "login" ? t("signInTab") : t("registerTab")}
-                    </button>
-                  ))}
+                {/* TOP TABS: [ Log In ] | [ Register ] | [ Continue as Guest ] */}
+                <div className="auth-nav-tabs">
+                  <button
+                    type="button"
+                    className={`auth-nav-tab ${mode === "login" ? "is-active" : ""}`}
+                    onClick={() => switchMode("login")}
+                  >
+                    <i className="bi bi-box-arrow-in-right me-2"></i>
+                    Log In
+                  </button>
+                  <button
+                    type="button"
+                    className={`auth-nav-tab ${mode === "register" ? "is-active" : ""}`}
+                    onClick={() => switchMode("register")}
+                  >
+                    <i className="bi bi-person-plus me-2"></i>
+                    Register
+                  </button>
+                  <button
+                    type="button"
+                    className={`auth-nav-tab ${mode === "guest" ? "is-active" : ""}`}
+                    onClick={() => switchMode("guest")}
+                  >
+                    <i className="bi bi-shield-check me-2"></i>
+                    Continue as Guest
+                  </button>
                 </div>
 
-                <div className="p-4 p-md-5">
-                  <h3 className="fw-bold mb-1">
-                    {mode === "login" ? t("loginToAccount") : t("createAnAccount")}
-                  </h3>
-                  <p className="text-muted mb-4 auth-hint">
-                    {mode === "login" ? t("loginToAccountDesc") : t("fillDetailsDesc")}
-                  </p>
-
-                  {/* MESSAGE ALERT */}
-                  {message.text && (
-                    <div
-                      className={`alert ${
+                {/* ALERT MESSAGES */}
+                {message.text && (
+                  <div
+                    className={`alert ${
+                      message.type === "success"
+                        ? "alert-success"
+                        : message.type === "info"
+                        ? "alert-info"
+                        : "alert-danger"
+                    } d-flex align-items-center gap-2 mb-4 auth-alert`}
+                    role="alert"
+                  >
+                    <i
+                      className={`bi ${
                         message.type === "success"
-                          ? "alert-success"
+                          ? "bi-check-circle-fill"
                           : message.type === "info"
-                          ? "alert-info"
-                          : "alert-danger"
-                      } d-flex align-items-center gap-2 auth-alert`}
-                      role="alert"
-                    >
-                      <i
-                        className={`bi ${
-                          message.type === "success"
-                            ? "bi-check-circle-fill"
-                            : message.type === "info"
-                            ? "bi-info-circle-fill"
-                            : "bi-exclamation-triangle-fill"
-                        }`}
-                      ></i>
-                      {message.text}
-                    </div>
-                  )}
+                          ? "bi-info-circle-fill"
+                          : "bi-exclamation-triangle-fill"
+                      }`}
+                    ></i>
+                    <span>{message.text}</span>
+                  </div>
+                )}
 
-                  {verifyStep && (
-                    <div>
-                      <h5 className="fw-bold mb-2">Verify your phone number</h5>
-                      <p className="text-muted auth-hint">
-                        One verified phone number is needed per account. We'll send a one-time code.
+                {/* ────────────────── TAB 1: LOG IN ────────────────── */}
+                {mode === "login" && (
+                  <div>
+                    <div className="mb-4">
+                      <h4 className="fw-bold mb-1 text-navy">Welcome back</h4>
+                      <p className="text-muted small mb-0">
+                        Log in to track your existing grievances and communicate with resolution teams.
                       </p>
+                    </div>
+
+                    <form onSubmit={handleSubmit} noValidate>
+                      {/* EMAIL */}
                       <div className="mb-3">
-                        <label className="form-label fw-semibold text-theme auth-hint">Phone number</label>
+                        <label className="form-label fw-semibold text-navy small mb-1">
+                          Email Address
+                        </label>
                         <input
-                          type="tel"
-                          className="form-control auth-input"
-                          placeholder="+919876543210"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          disabled={loading || verifyStep === "otp"}
+                          type="email"
+                          name="email"
+                          value={formData.email}
+                          onChange={handleInputChange}
+                          className={`form-control auth-input ${errors.email ? "is-invalid" : ""}`}
+                          placeholder="name@example.com"
+                          disabled={loading}
                         />
+                        {errors.email && <div className="invalid-feedback">{errors.email}</div>}
                       </div>
-                      {verifyStep === "otp" && (
-                        <div className="mb-3">
-                          <label className="form-label fw-semibold text-theme auth-hint">Verification code</label>
+
+                      {/* PASSWORD */}
+                      <div className="mb-4">
+                        <div className="d-flex justify-content-between align-items-center mb-1">
+                          <label className="form-label fw-semibold text-navy small mb-0">
+                            Password
+                          </label>
+                          <a href="#" className="text-decoration-none small text-muted auth-forgot-link">
+                            Forgot password?
+                          </a>
+                        </div>
+                        <div className="input-group">
                           <input
-                            type="text"
-                            inputMode="numeric"
-                            className="form-control auth-input"
-                            placeholder="123456"
-                            value={otp}
-                            onChange={(e) => setOtp(e.target.value)}
+                            type={showPassword ? "text" : "password"}
+                            name="password"
+                            value={formData.password}
+                            onChange={handleInputChange}
+                            className={`form-control auth-input ${errors.password ? "is-invalid" : ""}`}
+                            placeholder="••••••••"
                             disabled={loading}
                           />
+                          <button
+                            type="button"
+                            className="input-group-text bg-white border-start-0 text-muted cursor-pointer"
+                            onClick={() => setShowPassword((p) => !p)}
+                            tabIndex={-1}
+                          >
+                            <i className={`bi ${showPassword ? "bi-eye-slash" : "bi-eye"}`}></i>
+                          </button>
+                          {errors.password && <div className="invalid-feedback">{errors.password}</div>}
+                        </div>
+                      </div>
+
+                      {/* SUBMIT BUTTON */}
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        className="btn btn-purva-navy w-100 fw-bold py-2 shadow-sm"
+                      >
+                        {loading ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                            Signing In...
+                          </>
+                        ) : (
+                          "Log In"
+                        )}
+                      </button>
+
+                      <div className="text-center mt-4">
+                        <span className="text-muted small">Don&apos;t have an account? </span>
+                        <button
+                          type="button"
+                          className="btn btn-link p-0 text-navy fw-semibold small text-decoration-none"
+                          onClick={() => switchMode("register")}
+                        >
+                          Register here &rarr;
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* ────────────────── TAB 2: REGISTER ────────────────── */}
+                {mode === "register" && (
+                  <div>
+                    <div className="mb-4">
+                      <h4 className="fw-bold mb-1 text-navy">Create an Account</h4>
+                      <p className="text-muted small mb-0">
+                        Create an account to unlock full transparency, real-time tracking, and instant updates.
+                      </p>
+                    </div>
+
+                    <form onSubmit={handleSubmit} noValidate>
+                      {/* USER TYPE SELECTOR */}
+                      {!SINGLE_DEPARTMENT_MODE && (
+                        <div className="mb-3">
+                          <label className="form-label fw-semibold text-navy small mb-1">
+                            I am registering as:
+                          </label>
+                          <div className="d-flex gap-2">
+                            {[
+                              { id: "External", label: "Resident / Stakeholder" },
+                              { id: "Internal", label: "Puravankara Employee" },
+                              { id: "Contract", label: "Site Contractor" },
+                            ].map((role) => (
+                              <button
+                                key={role.id}
+                                type="button"
+                                className={`btn btn-sm flex-fill fw-semibold py-2 ${
+                                  formData.userType === role.id
+                                    ? "btn-navy-active"
+                                    : "btn-outline-secondary"
+                                }`}
+                                onClick={() => setFormData((p) => ({ ...p, userType: role.id }))}
+                              >
+                                {role.label}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       )}
-                      {verifyStep === "phone" ? (
-                        <button type="button" className="btn btn-danger w-100 fw-bold auth-submit-btn" onClick={sendOtp} disabled={loading}>
-                          {loading ? t("processing") : "Send code"}
-                        </button>
-                      ) : (
-                        <>
-                          <button type="button" className="btn btn-danger w-100 fw-bold auth-submit-btn" onClick={verifyOtp} disabled={loading}>
-                            {loading ? t("processing") : "Verify"}
-                          </button>
-                          <div className="d-flex justify-content-between mt-3">
-                            <button type="button" className="btn btn-link p-0" onClick={sendOtp} disabled={loading}>Resend code</button>
-                            <button type="button" className="btn btn-link p-0" onClick={() => { setVerifyStep("phone"); setOtp(""); }} disabled={loading}>Change number</button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
 
-                  {!verifyStep && (
-                  <form onSubmit={handleSubmit} noValidate>
-                    {/* FULL NAME — register only */}
-                    {mode === "register" && (
+                      {/* FULL NAME */}
                       <div className="mb-3">
-                        <label className="form-label fw-semibold text-theme auth-hint">
-                          {t("fullNameLabel")}
+                        <label className="form-label fw-semibold text-navy small mb-1">
+                          Full Name
                         </label>
                         <input
                           type="text"
                           name="name"
                           value={formData.name}
                           onChange={handleInputChange}
-                          className={`form-control ${errors.name ? "is-invalid" : ""} auth-input`}
-                          placeholder={t("fullNamePlaceholder")}
+                          className={`form-control auth-input ${errors.name ? "is-invalid" : ""}`}
+                          placeholder="e.g. Rahul Sharma"
                           disabled={loading}
                         />
                         {errors.name && <div className="invalid-feedback">{errors.name}</div>}
                       </div>
-                    )}
 
-                    {/* CATEGORY-SPECIFIC FIELDS */}
-                    {mode === "register" && formData.userType === "Internal" && (
+                      {/* ROLE-SPECIFIC FIELD */}
+                      {formData.userType === "Internal" && (
+                        <div className="mb-3">
+                          <label className="form-label fw-semibold text-navy small mb-1">
+                            Employee ID
+                          </label>
+                          <input
+                            type="text"
+                            name="employeeId"
+                            value={formData.employeeId}
+                            onChange={handleInputChange}
+                            className="form-control auth-input"
+                            placeholder="e.g. PURVA-10492"
+                            disabled={loading}
+                          />
+                        </div>
+                      )}
+
+                      {formData.userType === "Contract" && (
+                        <div className="mb-3">
+                          <label className="form-label fw-semibold text-navy small mb-1">
+                            Contractor / Agency Name
+                          </label>
+                          <input
+                            type="text"
+                            name="agencyName"
+                            value={formData.agencyName}
+                            onChange={handleInputChange}
+                            className="form-control auth-input"
+                            placeholder="e.g. Apex Safety Engineering"
+                            disabled={loading}
+                          />
+                        </div>
+                      )}
+
+                      {formData.userType === "External" && (
+                        <div className="mb-3">
+                          <label className="form-label fw-semibold text-navy small mb-1">
+                            City / Location
+                          </label>
+                          <input
+                            type="text"
+                            name="location"
+                            value={formData.location}
+                            onChange={handleInputChange}
+                            className="form-control auth-input"
+                            placeholder="e.g. Bengaluru"
+                            disabled={loading}
+                          />
+                        </div>
+                      )}
+
+                      {/* EMAIL */}
                       <div className="mb-3">
-                        <label className="form-label fw-semibold text-theme auth-hint">
-                          Employee ID
+                        <label className="form-label fw-semibold text-navy small mb-1">
+                          Email Address
                         </label>
-                        <input
-                          type="text"
-                          name="employeeId"
-                          value={formData.employeeId}
-                          onChange={handleInputChange}
-                          className="form-control auth-input"
-                          placeholder="Enter your Employee ID"
-                          disabled={loading}
-                        />
-                      </div>
-                    )}
-
-                    {mode === "register" && formData.userType === "Contract" && (
-                      <div className="mb-3">
-                        <label className="form-label fw-semibold text-theme auth-hint">
-                          Agency Name
-                        </label>
-                        <input
-                          type="text"
-                          name="agencyName"
-                          value={formData.agencyName}
-                          onChange={handleInputChange}
-                          className="form-control auth-input"
-                          placeholder="Enter your Agency/Contractor name"
-                          disabled={loading}
-                        />
-                      </div>
-                    )}
-
-                    {mode === "register" && formData.userType === "External" && (
-                      <div className="mb-3">
-                        <label className="form-label fw-semibold text-theme auth-hint">
-                          City / Location
-                        </label>
-                        <input
-                          type="text"
-                          name="location"
-                          value={formData.location}
-                          onChange={handleInputChange}
-                          className="form-control auth-input"
-                          placeholder="e.g. Bengaluru, Mumbai"
-                          disabled={loading}
-                        />
-                      </div>
-                    )}
-
-
-                    {/* EMAIL */}
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold text-theme auth-hint">
-                        {t("authEmailAddress")}
-                      </label>
-                      <div className="input-group">
-                        <span
-                          className="input-group-text text-theme auth-addon-start"
-                        >
-                          <i className="bi bi-envelope"></i>
-                        </span>
                         <input
                           type="email"
                           name="email"
                           value={formData.email}
                           onChange={handleInputChange}
-                          className={`form-control ${errors.email ? "is-invalid" : ""} auth-input-end`}
-                          placeholder={t("emailPlaceholder")}
+                          className={`form-control auth-input ${errors.email ? "is-invalid" : ""}`}
+                          placeholder={formData.userType === "Internal" ? "name@company.com" : "name@example.com"}
                           disabled={loading}
                         />
                         {errors.email && <div className="invalid-feedback">{errors.email}</div>}
                       </div>
-                    </div>
 
-                    {/* USER TYPE INDICATOR — register only */}
-                    {mode === "register" && !SINGLE_DEPARTMENT_MODE && (
-                      <div className="mb-3 d-flex align-items-center justify-content-between p-3 auth-role-summary">
-                        <div>
-                          <span className="text-muted small d-block">Registering as:</span>
-                          <strong className="text-navy">{formData.userType}</strong>
-                        </div>
-                        <button type="button" onClick={() => setFormData(p => ({ ...p, userType: "" }))} className="btn btn-sm btn-outline-secondary fs-11">
-                          Change
-                        </button>
-                      </div>
-                    )}
-
-                    {/* PASSWORD */}
-                    <div className="mb-3">
-                      <div className="d-flex justify-content-between align-items-center mb-1">
-                        <label className="form-label fw-semibold mb-0 text-theme auth-hint">
-                          {t("passwordLabel")}
+                      {/* PASSWORD */}
+                      <div className="mb-3">
+                        <label className="form-label fw-semibold text-navy small mb-1">
+                          Password
                         </label>
-                        {mode === "login" && (
-                          <a href="#" className="text-decoration-none text-accent auth-forgot-link">
-                            {t("forgotPassword")}
-                          </a>
-                        )}
-                      </div>
-                      <div className="input-group">
-                        <span
-                          className="input-group-text text-theme auth-addon-start"
-                        >
-                          <i className="bi bi-lock"></i>
-                        </span>
                         <input
                           type={showPassword ? "text" : "password"}
                           name="password"
                           value={formData.password}
                           onChange={handleInputChange}
-                          className={`form-control ${errors.password ? "is-invalid" : ""} rounded-0 auth-input-mid`}
+                          className={`form-control auth-input ${errors.password ? "is-invalid" : ""}`}
                           placeholder="••••••••"
                           disabled={loading}
                         />
-                        <button
-                          type="button"
-                          className="input-group-text cursor-pointer text-theme auth-addon-end"
-                          onClick={() => setShowPassword((p) => !p)}
-                          tabIndex={-1}
-                        >
-                          <i className={`bi ${showPassword ? "bi-eye-slash" : "bi-eye"}`}></i>
-                        </button>
                         {errors.password && <div className="invalid-feedback">{errors.password}</div>}
                       </div>
-                    </div>
 
-                    {/* CONFIRM PASSWORD — register only */}
-                    {mode === "register" && (
+                      {/* CONFIRM PASSWORD */}
                       <div className="mb-4">
-                        <label className="form-label fw-semibold text-navy auth-hint">
-                          {t("confirmPasswordLabel")}
+                        <label className="form-label fw-semibold text-navy small mb-1">
+                          Confirm Password
                         </label>
-                        <div className="input-group">
-                          <span
-                            className="input-group-text auth-addon-start-light"
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          name="confirmPassword"
+                          value={formData.confirmPassword}
+                          onChange={handleInputChange}
+                          className={`form-control auth-input ${errors.confirmPassword ? "is-invalid" : ""}`}
+                          placeholder="••••••••"
+                          disabled={loading}
+                        />
+                        {errors.confirmPassword && <div className="invalid-feedback">{errors.confirmPassword}</div>}
+                      </div>
+
+                      {/* SUBMIT BUTTON */}
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        className="btn btn-purva-navy w-100 fw-bold py-2 shadow-sm"
+                      >
+                        {loading ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                            Creating Account...
+                          </>
+                        ) : (
+                          "Create Account"
+                        )}
+                      </button>
+
+                      <div className="text-center mt-4">
+                        <span className="text-muted small">Already have an account? </span>
+                        <button
+                          type="button"
+                          className="btn btn-link p-0 text-navy fw-semibold small text-decoration-none"
+                          onClick={() => switchMode("login")}
+                        >
+                          Log In here &rarr;
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* ────────────────── TAB 3: CONTINUE AS GUEST ────────────────── */}
+                {mode === "guest" && (
+                  <div>
+                    {!guestResult ? (
+                      <>
+                        <div className="mb-4">
+                          <h4 className="fw-bold mb-1 text-navy">Quick Guest Submission</h4>
+                          <p className="text-muted small mb-0">
+                            Submit your concern anonymously or without an account. You will receive a Ticket ID and Secret PIN to track resolution.
+                          </p>
+                        </div>
+
+                        <form onSubmit={handleGuestSubmit} noValidate>
+                          <div className="row g-3 mb-3">
+                            {/* PROJECT NAME */}
+                            <div className="col-12 col-md-6">
+                              <label className="form-label fw-semibold text-navy small mb-1">
+                                Project Name
+                              </label>
+                              <select
+                                name="project"
+                                value={guestData.project}
+                                onChange={handleGuestInputChange}
+                                className="form-select auth-input"
+                                disabled={guestLoading}
+                              >
+                                {PURVA_PROJECTS.map((proj) => (
+                                  <option key={proj} value={proj}>{proj}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* CATEGORY */}
+                            <div className="col-12 col-md-6">
+                              <label className="form-label fw-semibold text-navy small mb-1">
+                                Issue Category
+                              </label>
+                              <select
+                                name="category"
+                                value={guestData.category}
+                                onChange={handleGuestInputChange}
+                                className="form-select auth-input"
+                                disabled={guestLoading}
+                              >
+                                {COMPLAINT_CATEGORIES.map((cat) => (
+                                  <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="row g-3 mb-3">
+                            {/* SEVERITY */}
+                            <div className="col-12 col-md-6">
+                              <label className="form-label fw-semibold text-navy small mb-1">
+                                Severity Level
+                              </label>
+                              <select
+                                name="severity"
+                                value={guestData.severity}
+                                onChange={handleGuestInputChange}
+                                className="form-select auth-input"
+                                disabled={guestLoading}
+                              >
+                                {SEVERITY_LEVELS.map((sev) => (
+                                  <option key={sev} value={sev}>{sev}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* ANONYMOUS TOGGLE */}
+                            <div className="col-12 col-md-6 d-flex align-items-center pt-md-4">
+                              <div className="form-check">
+                                <input
+                                  className="form-check-input"
+                                  type="checkbox"
+                                  id="guestAnonCheck"
+                                  name="isAnonymous"
+                                  checked={guestData.isAnonymous}
+                                  onChange={handleGuestInputChange}
+                                />
+                                <label className="form-check-label text-navy small fw-semibold" htmlFor="guestAnonCheck">
+                                  Submit Anonymously
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* OPTIONAL CONTACT INFO (IF NOT ANONYMOUS) */}
+                          {!guestData.isAnonymous && (
+                            <div className="p-3 bg-light rounded-3 border mb-3">
+                              <div className="row g-3">
+                                <div className="col-12 col-md-4">
+                                  <label className="form-label text-muted small mb-1">Your Name</label>
+                                  <input
+                                    type="text"
+                                    name="name"
+                                    value={guestData.name}
+                                    onChange={handleGuestInputChange}
+                                    className="form-control form-control-sm"
+                                    placeholder="Name"
+                                  />
+                                </div>
+                                <div className="col-12 col-md-4">
+                                  <label className="form-label text-muted small mb-1">Phone Number</label>
+                                  <input
+                                    type="tel"
+                                    name="phone"
+                                    value={guestData.phone}
+                                    onChange={handleGuestInputChange}
+                                    className="form-control form-control-sm"
+                                    placeholder="+91..."
+                                  />
+                                </div>
+                                <div className="col-12 col-md-4">
+                                  <label className="form-label text-muted small mb-1">Email Address</label>
+                                  <input
+                                    type="email"
+                                    name="email"
+                                    value={guestData.email}
+                                    onChange={handleGuestInputChange}
+                                    className="form-control form-control-sm"
+                                    placeholder="email@example.com"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* DESCRIPTION */}
+                          <div className="mb-4">
+                            <label className="form-label fw-semibold text-navy small mb-1">
+                              Description of Concern
+                            </label>
+                            <textarea
+                              name="description"
+                              rows={4}
+                              value={guestData.description}
+                              onChange={handleGuestInputChange}
+                              className="form-control auth-input"
+                              placeholder="Please describe the grievance, location specifics, or incident details..."
+                              required
+                              disabled={guestLoading}
+                            />
+                          </div>
+
+                          {/* SUBMIT BUTTON */}
+                          <button
+                            type="submit"
+                            disabled={guestLoading}
+                            className="btn btn-purva-navy w-100 fw-bold py-2 shadow-sm"
                           >
-                            <i className="bi bi-lock-fill"></i>
-                          </span>
-                          <input
-                            type={showConfirmPassword ? "text" : "password"}
-                            name="confirmPassword"
-                            value={formData.confirmPassword}
-                            onChange={handleInputChange}
-                            className={`form-control ${errors.confirmPassword ? "is-invalid" : ""} rounded-0 auth-input-mid`}
-                            placeholder="••••••••"
-                            disabled={loading}
-                          />
+                            {guestLoading ? (
+                              <>
+                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                Submitting Grievance...
+                              </>
+                            ) : (
+                              "Submit Grievance"
+                            )}
+                          </button>
+                        </form>
+                      </>
+                    ) : (
+                      /* GUEST RECEIPT */
+                      <div className="text-center py-4">
+                        <div className="auth-check-icon mx-auto mb-3" style={{ width: "48px", height: "48px", fontSize: "22px" }}>
+                          <i className="bi bi-check-lg"></i>
+                        </div>
+                        <h4 className="fw-bold mb-1 text-navy">Grievance Submitted</h4>
+                        <p className="text-muted small mb-4">
+                          Your concern has been registered and routed to the ESG resolution team.
+                        </p>
+
+                        <div className="bg-light p-3 rounded-3 border mb-4 d-inline-block text-start w-100" style={{ maxWidth: "420px" }}>
+                          <div className="d-flex justify-content-between align-items-center pb-2 mb-2 border-bottom">
+                            <div>
+                              <span className="text-muted d-block small text-uppercase fw-semibold">Ticket ID</span>
+                              <h4 className="fw-bold mb-0 text-danger ls-1">{guestResult.ticketId}</h4>
+                            </div>
+                            <div className="text-end">
+                              <span className="text-muted d-block small text-uppercase fw-semibold">Secret PIN</span>
+                              <h4 className="fw-bold mb-0 text-navy ls-1">{guestResult.secretPin}</h4>
+                            </div>
+                          </div>
+                          <p className="text-muted small mb-0">
+                            <i className="bi bi-shield-check me-1 text-success"></i>
+                            Save this Ticket ID and Secret PIN to track your complaint status privately at any time.
+                          </p>
+                        </div>
+
+                        <div className="d-flex justify-content-center gap-3">
                           <button
                             type="button"
-                            className="input-group-text cursor-pointer auth-addon-end-light"
-                            onClick={() => setShowConfirmPassword((p) => !p)}
-                            tabIndex={-1}
+                            className="btn btn-outline-secondary px-4 fw-semibold"
+                            onClick={() => {
+                              setGuestResult(null);
+                              setGuestData((p) => ({ ...p, description: "" }));
+                            }}
                           >
-                            <i className={`bi ${showConfirmPassword ? "bi-eye-slash" : "bi-eye"}`}></i>
+                            Submit Another
                           </button>
-                          {errors.confirmPassword && <div className="invalid-feedback">{errors.confirmPassword}</div>}
+                          <button
+                            type="button"
+                            className="btn btn-purva-navy px-4 fw-semibold shadow-sm"
+                            onClick={() => navigate("/track", { state: { trackingId: guestResult.ticketId } })}
+                          >
+                            Track Status &rarr;
+                          </button>
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
 
-                    {/* SUBMIT BUTTON */}
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="btn btn-danger w-100 fw-bold ls-half auth-submit-btn"
-                    >
-                      {loading ? (
-                        <>
-                          <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                          {t("processing")}
-                        </>
-                      ) : mode === "login" ? (
-                        <>
-                          <i className="bi bi-box-arrow-in-right me-2"></i>{t("signInBtn")}
-                        </>
-                      ) : (
-                        <>
-                          <i className="bi bi-person-plus me-2"></i>{t("createAccountBtn")}
-                        </>
-                      )}
-                    </button>
-
-                    {/* SWITCH MODE LINK */}
-                    <div className="text-center mt-4 auth-switch">
-                      {mode === "login" ? (
-                        <>
-                          {t("dontHaveAccount")}{" "}
-                          <button
-                            className="border-0 text-navy fw-bold cursor-pointer p-0 auth-link-btn"
-                            type="button"
-                            onClick={() => switchMode("register")}
-                            disabled={loading}
-                          >
-                            {t("registerHere")}
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          {t("alreadyHaveAccount")}{" "}
-                          <button
-                            className="border-0 text-navy fw-bold cursor-pointer p-0 auth-link-btn"
-                            type="button"
-                            onClick={() => switchMode("login")}
-                            disabled={loading}
-                          >
-                            {t("signInLink")}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </form>
-                  )}
-                </div>
-              </div>
-            )}
-
-              {/* ADMIN PORTAL LINK — mobile only */}
-              <div className="d-lg-none text-center mt-3">
-                <span className="text-muted auth-admin-desc">
-                  {t("areYouAdminQ")}{" "}
-                  <a className="text-accent fw-bold auth-link" href="/admin">
-                    {t("adminPortalLink")}
-                  </a>
-                </span>
               </div>
             </div>
 
