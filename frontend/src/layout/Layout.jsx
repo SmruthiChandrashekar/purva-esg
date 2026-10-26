@@ -8,6 +8,16 @@ function Layout({ children }) {
   const location = useLocation();
   const { user } = useAuth();
   const isAssistantPage = location.pathname === "/assistant";
+  const isSimulation =
+    location.pathname === "/" ||
+    location.pathname.startsWith("/purva") ||
+    location.pathname.startsWith("/simulation") ||
+    location.pathname.startsWith("/residential") ||
+    location.pathname.startsWith("/bengaluru");
+
+  if (isSimulation) {
+    return <>{children}</>;
+  }
 
   return (
     <>
