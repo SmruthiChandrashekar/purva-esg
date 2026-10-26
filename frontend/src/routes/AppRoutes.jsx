@@ -64,11 +64,11 @@ const MainRoutes = () => {
         <Route path="/grm" element={getRootElement()} />
         
         {/* Protected User Routes */}
-        <Route path="/track" element={<ProtectedRoute><Track /></ProtectedRoute>} />
-        <Route path="/lodge-selection" element={SINGLE_DEPARTMENT_MODE ? <RedirectKeepSearch to="/lodge-external" /> : isAdmin ? <Navigate to="/admin/dashboard" replace /> : <ProtectedRoute><LodgeSelection /></ProtectedRoute>} />
-        <Route path="/lodge-internal" element={SINGLE_DEPARTMENT_MODE ? <RedirectKeepSearch to="/lodge-external" /> : isAdmin ? <Navigate to="/admin/dashboard" replace /> : <ProtectedRoute><LodgeInternal /></ProtectedRoute>} />
-        <Route path="/lodge-contract" element={SINGLE_DEPARTMENT_MODE ? <RedirectKeepSearch to="/lodge-external" /> : isAdmin ? <Navigate to="/admin/dashboard" replace /> : <ProtectedRoute><LodgeContract /></ProtectedRoute>} />
-        <Route path="/lodge-external" element={isAdmin ? <Navigate to="/admin/dashboard" replace /> : <ProtectedRoute><LodgeExternal /></ProtectedRoute>} />
+        <Route path="/track" element={<ProtectedRoute allowGuest><Track /></ProtectedRoute>} />
+        <Route path="/lodge-selection" element={SINGLE_DEPARTMENT_MODE ? <RedirectKeepSearch to="/lodge-external" /> : isAdmin ? <Navigate to="/admin/dashboard" replace /> : <ProtectedRoute allowGuest><LodgeSelection /></ProtectedRoute>} />
+        <Route path="/lodge-internal" element={SINGLE_DEPARTMENT_MODE ? <RedirectKeepSearch to="/lodge-external" /> : isAdmin ? <Navigate to="/admin/dashboard" replace /> : <ProtectedRoute allowGuest><LodgeInternal /></ProtectedRoute>} />
+        <Route path="/lodge-contract" element={SINGLE_DEPARTMENT_MODE ? <RedirectKeepSearch to="/lodge-external" /> : isAdmin ? <Navigate to="/admin/dashboard" replace /> : <ProtectedRoute allowGuest><LodgeContract /></ProtectedRoute>} />
+        <Route path="/lodge-external" element={isAdmin ? <Navigate to="/admin/dashboard" replace /> : <ProtectedRoute allowGuest><LodgeExternal /></ProtectedRoute>} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 

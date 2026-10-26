@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { resetApiClientState, apiClient } from "../services/api";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "../services/supabaseClient";
 import { useLanguage } from "../context/LanguageContext";
 import "./Auth.css";
@@ -17,12 +17,24 @@ const setVerifyPending = (on) => {
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { t } = useLanguage();
   const [mode, setMode] = useState("login");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [authOption, setAuthOption] = useState("account");
+
+  const handleContinueAsGuest = () => {
+    sessionStorage.setItem("isGuest", "true");
+    const projectParam = searchParams.get("project");
+    if (projectParam) {
+      navigate(`/lodge-selection?project=${encodeURIComponent(projectParam)}`);
+    } else {
+      navigate("/lodge-selection");
+    }
+  };
 
   useEffect(() => {
     supabase.auth.signOut().catch(() => {});
@@ -338,6 +350,84 @@ const Auth = () => {
 
             {/* RIGHT: AUTH FORM CARD */}
             <div className="col-lg-7 col-md-10 col-12 auth-side">
+
+              {/* PORTAL ACCESS OPTIONS */}
+              <div className="auth-choices-container mb-4">
+                <div className="row g-3">
+                  {/* OPTION 1 */}
+                  <div className="col-12 col-md-6">
+                    <div
+                      className={`auth-choice-card h-100 ${authOption === "account" ? "is-active" : ""}`}
+                      onClick={() => setAuthOption("account")}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setAuthOption("account"); }}
+                    >
+                      <div>
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <span className="auth-choice-badge badge-account">Option 1</span>
+                          {authOption === "account" && (
+                            <span className="badge bg-primary text-white fs-11 px-2 py-1">Active</span>
+                          )}
+                        </div>
+                        <h4 className="auth-choice-title">
+                          [ Login / Register ]
+                        </h4>
+                        <p className="auth-choice-desc">
+                          &ldquo;Create an account to unlock full transparency. Track your grievances in real-time, receive instant notifications, view proof of action taken by our teams, and communicate directly with the ESG resolution team.&rdquo;
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="auth-choice-btn btn-account w-100 mt-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAuthOption("account");
+                        }}
+                      >
+                        <i className="bi bi-person-fill-lock"></i>
+                        {mode === "register" ? "Register Account" : "Login / Register"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* OPTION 2 */}
+                  <div className="col-12 col-md-6">
+                    <div
+                      className="auth-choice-card h-100 auth-choice-guest"
+                      onClick={handleContinueAsGuest}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleContinueAsGuest(); }}
+                    >
+                      <div>
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <span className="auth-choice-badge badge-guest">Option 2</span>
+                          <span className="badge bg-success-subtle text-success border border-success-subtle fs-11 px-2 py-1">No Login</span>
+                        </div>
+                        <h4 className="auth-choice-title">
+                          [ Continue as Guest ]
+                        </h4>
+                        <p className="auth-choice-desc">
+                          &ldquo;No login required. Submit a complaint quickly. You will receive a Ticket ID and Secret PIN to track this specific issue. We recommend this for anonymous reporting.&rdquo;
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="auth-choice-btn btn-guest w-100 mt-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleContinueAsGuest();
+                        }}
+                      >
+                        <i className="bi bi-arrow-right-circle"></i>
+                        Continue as Guest
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {mode === "register" && !formData.userType ? (
                 /* STEP 1: CATEGORY SELECTION */
                 <div className="card border-0 shadow-lg p-4 p-md-5 auth-card">

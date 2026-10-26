@@ -15,6 +15,7 @@ function LodgeExternal() {
   // Set when the user came from a project page on the Puravankara site.
   const project = new URLSearchParams(location.search).get("project");
   const [submittedId, setSubmittedId] = useState(null);
+  const [secretPin, setSecretPin] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [queryRedirect, setQueryRedirect] = useState(null);
   const { t } = useLanguage();
@@ -101,6 +102,8 @@ function LodgeExternal() {
         navigate("/assistant", { state: { prefill: cleanDescription } });
         return;
       }
+      const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
+      setSecretPin(generatedPin);
       setSubmittedId(data.grievance_id || data.id);
       return;
 
@@ -256,9 +259,23 @@ function LodgeExternal() {
                 <p className="text-muted mb-4 fs-6 px-3">
                   {t("grievanceSuccessMsg")}
                 </p>
-                <div className="bg-light p-4 rounded mb-5 d-inline-block border shadow-sm">
-                  <span className="text-muted d-block mb-1 text-uppercase fs-14 ls-1">{t("trackingId")}</span>
-                  <h2 className="fw-bold mb-0 text-danger ls-2">{submittedId}</h2>
+                <div className="bg-light p-4 rounded mb-4 d-inline-block border shadow-sm text-start" style={{ minWidth: "320px", maxWidth: "480px" }}>
+                  <div className="d-flex justify-content-between align-items-center pb-3 mb-3 border-bottom">
+                    <div>
+                      <span className="text-muted d-block mb-1 text-uppercase fs-12 fw-semibold ls-1">Ticket ID</span>
+                      <h3 className="fw-bold mb-0 text-danger ls-2">{submittedId}</h3>
+                    </div>
+                    {secretPin && (
+                      <div className="text-end">
+                        <span className="text-muted d-block mb-1 text-uppercase fs-12 fw-semibold ls-1">Secret PIN</span>
+                        <h3 className="fw-bold mb-0 text-navy ls-2">{secretPin}</h3>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-muted small mb-0">
+                    <i className="bi bi-shield-check me-1 text-success"></i>
+                    Please save this <strong>Ticket ID</strong> and <strong>Secret PIN</strong> to track this complaint anonymously at any time.
+                  </p>
                 </div>
                 <div className="d-flex justify-content-center gap-3">
                   <button onClick={() => setSubmittedId(null)} className="btn btn-outline-secondary px-4 py-2 fw-bold">
