@@ -15,16 +15,13 @@ const setVerifyPending = (on) => {
   } catch (_) {}
 };
 
-const PURVA_PROJECTS = [
-  "Purva Heritage",
-  "Purva Celestial",
-  "Purva Atmosphere",
-  "Purva Park Hill",
-  "Purva Somerset House",
-  "Purva Tivoli",
-  "Purva Meraki",
-  "Corporate / Other"
-];
+import { PURVA_CITIES_PROJECTS, findProjectByNameOrId } from "../config/projectsData";
+
+const PURVA_PROJECTS = Object.values(PURVA_CITIES_PROJECTS)
+  .flat()
+  .map((p) => p.name)
+  .concat(["Corporate / Other"]);
+
 
 const COMPLAINT_CATEGORIES = [
   "Environmental & Sustainability",
@@ -54,13 +51,20 @@ const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  const projectParam = searchParams.get("project");
+  const storedProject = sessionStorage.getItem("purva_selected_project");
+  const rememberedProject = projectParam || storedProject || "";
+
   useEffect(() => {
     supabase.auth.signOut().catch(() => {});
     const msg = searchParams.get("message");
     if (msg) {
       setMessage({ type: "info", text: msg });
     }
-  }, [searchParams]);
+    if (projectParam) {
+      sessionStorage.setItem("purva_selected_project", projectParam);
+    }
+  }, [searchParams, projectParam]);
 
   // Account Form State
   const [formData, setFormData] = useState({
@@ -76,9 +80,8 @@ const Auth = () => {
   const [errors, setErrors] = useState({});
 
   // Guest Form State
-  const initialProject = searchParams.get("project") || "Purva Heritage";
   const [guestData, setGuestData] = useState({
-    project: initialProject,
+    project: rememberedProject || PURVA_PROJECTS[0],
     category: "Environmental & Sustainability",
     severity: "Medium",
     description: "",
@@ -89,6 +92,7 @@ const Auth = () => {
   });
   const [guestLoading, setGuestLoading] = useState(false);
   const [guestResult, setGuestResult] = useState(null); // { ticketId, secretPin }
+
 
   // Phone OTP verification (only used when VITE_REQUIRE_PHONE_OTP=true)
   const REQUIRE_PHONE_OTP = import.meta.env.VITE_REQUIRE_PHONE_OTP === "true";
@@ -186,8 +190,10 @@ const Auth = () => {
           setVerifyStep("phone");
           return "verify";
         }
-        setMessage({ type: "success", text: "Registration successful! Redirecting to dashboard..." });
-        setTimeout(() => { window.location.href = "/"; }, 1500);
+        const savedProj = sessionStorage.getItem("purva_selected_project") || projectParam;
+        const targetUrl = savedProj ? `/grm?project=${encodeURIComponent(savedProj)}` : "/grm";
+        setMessage({ type: "success", text: "Registration successful! Redirecting..." });
+        setTimeout(() => { window.location.href = targetUrl; }, 1200);
       }
     } catch (err) {
       setMessage({ type: "error", text: parseError(err) });
@@ -222,7 +228,9 @@ const Auth = () => {
         setTimeout(() => { window.location.href = "/admin/dashboard"; }, 1000);
       } else {
         setMessage({ type: "success", text: "Login successful! Welcome back." });
-        setTimeout(() => { window.location.href = "/"; }, 1000);
+        const savedProj = sessionStorage.getItem("purva_selected_project") || projectParam;
+        const targetUrl = savedProj ? `/grm?project=${encodeURIComponent(savedProj)}` : "/grm";
+        setTimeout(() => { window.location.href = targetUrl; }, 1000);
       }
     } catch (err) {
       setMessage({ type: "error", text: parseError(err) });
@@ -377,6 +385,13 @@ const Auth = () => {
     setVerifyPending(false);
   };
 
+  const features = [
+    { icon: "bi-shield-lock", label: t("featureConfidential"), desc: t("featureConfidentialDesc") },
+    { icon: "bi-robot", label: t("featureAI"), desc: t("featureAIDesc") },
+    { icon: "bi-clock-history", label: t("feature247"), desc: t("feature247Desc") },
+    { icon: "bi-graph-up-arrow", label: t("featureRealtime"), desc: t("featureRealtimeDesc") },
+  ];
+
   return (
     <div className="auth-page-wrapper">
       {/* HERO BANNER */}
@@ -408,66 +423,48 @@ const Auth = () => {
         <div className="container py-4">
           <div className="row g-4 g-lg-5 justify-content-center align-items-start">
 
-            {/* LEFT: THE PITCH */}
+            {/* LEFT: FEATURE HIGHLIGHTS */}
             <div className="col-lg-5 col-12 auth-side">
-              <div className="auth-pitch-card p-4 p-md-5 rounded-4 bg-white border shadow-sm">
-                <span className="auth-pitch-badge mb-3">Puravankara GRM</span>
-                <h2 className="fw-bold text-navy mb-2 auth-pitch-title">
-                  Stakeholder Grievance Portal
-                </h2>
-                <p className="text-muted auth-pitch-subtitle mb-4">
-                  Report an ESG, Community, or Site concern directly to our dedicated resolution teams.
+              <h4 className="fw-bold mb-4 text-theme">
+                {t("whyUseGRM")}
+              </h4>
+              <div className="d-flex flex-column gap-3">
+                {features.map((f, i) => (
+                  <div
+                    key={i}
+                    className="card border-0 shadow-sm p-3 auth-feature-card"
+                  >
+                    <div className="d-flex align-items-center gap-3">
+                      <div
+                        className="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0 auth-feature-icon"
+                      >
+                        <i className={`bi ${f.icon} auth-feature-glyph`}></i>
+                      </div>
+                      <div>
+                        <div className="fw-bold auth-feature-label">{f.label}</div>
+                        <div className="text-muted auth-feature-desc">{f.desc}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div
+                className="card border-0 shadow-sm mt-4 p-4 auth-admin-card"
+              >
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  <i className="bi bi-person-badge text-danger auth-feature-glyph"></i>
+                  <span className="fw-bold text-white">{t("adminLoginTitle")}</span>
+                </div>
+                <p className="mb-3 opacity-75 auth-admin-desc">
+                  {t("adminLoginDesc")}
                 </p>
-
-                {/* CLEAN CHECKLIST */}
-                <div className="auth-checklist mb-4">
-                  <div className="auth-check-item">
-                    <div className="auth-check-icon">
-                      <i className="bi bi-check-lg"></i>
-                    </div>
-                    <div>
-                      <h6 className="fw-bold mb-0 text-navy">Confidential &amp; Secure</h6>
-                      <p className="text-muted small mb-0">End-to-end encrypted with zero retaliation policy and anonymous filing.</p>
-                    </div>
-                  </div>
-
-                  <div className="auth-check-item">
-                    <div className="auth-check-icon">
-                      <i className="bi bi-check-lg"></i>
-                    </div>
-                    <div>
-                      <h6 className="fw-bold mb-0 text-navy">Real-time Tracking &amp; Proof</h6>
-                      <p className="text-muted small mb-0">Live status progression with verified photographic evidence of action taken.</p>
-                    </div>
-                  </div>
-
-                  <div className="auth-check-item">
-                    <div className="auth-check-icon">
-                      <i className="bi bi-check-lg"></i>
-                    </div>
-                    <div>
-                      <h6 className="fw-bold mb-0 text-navy">Automated Routing for Faster Resolution</h6>
-                      <p className="text-muted small mb-0">Direct AI routing to the responsible project engineer and ESG compliance officer.</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* TRUST BADGE */}
-                <div className="auth-trust-box p-3 rounded-3 mb-4 d-flex align-items-center gap-3">
-                  <div className="auth-trust-emblem">50</div>
-                  <div className="small text-muted">
-                    <strong className="text-navy d-block">50 Years of Credibility</strong>
-                    Committed to sustainable communities &amp; transparent governance.
-                  </div>
-                </div>
-
-                {/* MUTED SERVICE ADMIN LINK */}
-                <div className="pt-2 border-top auth-admin-footer">
-                  <span className="text-muted small">Are you a service admin? </span>
-                  <a href="/admin" className="text-decoration-none fw-semibold small auth-admin-link">
-                    Log in here &rarr;
-                  </a>
-                </div>
+                <a
+                  href="/admin"
+                  className="btn btn-danger btn-sm w-100 mt-2 rounded-3 fw-semibold p-2"
+                >
+                  {t("goToAdminPortal")}
+                </a>
               </div>
             </div>
 
@@ -814,10 +811,25 @@ const Auth = () => {
                     {!guestResult ? (
                       <>
                         <div className="mb-4">
-                          <h4 className="fw-bold mb-1 text-navy">Quick Guest Submission</h4>
-                          <p className="text-muted small mb-0">
-                            Submit your concern anonymously or without an account. You will receive a Ticket ID and Secret PIN to track resolution.
-                          </p>
+                          <div className="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                            <div>
+                              <h4 className="fw-bold mb-1 text-navy">Quick Guest Submission</h4>
+                              <p className="text-muted small mb-0">
+                                Submit your concern anonymously or without an account. You will receive a Ticket ID and Secret PIN to track resolution.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-outline-danger btn-sm fw-semibold rounded-pill px-3 py-1 mt-1"
+                              onClick={() => {
+                                sessionStorage.setItem("isGuest", "true");
+                                const proj = rememberedProject || guestData.project;
+                                navigate(proj ? `/lodge-external?project=${encodeURIComponent(proj)}` : "/lodge-external");
+                              }}
+                            >
+                              Open Full Form &rarr;
+                            </button>
+                          </div>
                         </div>
 
                         <form onSubmit={handleGuestSubmit} noValidate>

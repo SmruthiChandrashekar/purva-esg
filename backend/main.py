@@ -131,6 +131,47 @@ async def health_check():
         "timestamp": time.time()
     }
 
+# --- PURAVANKARA PROJECTS MASTER SEED & ENDPOINTS ---
+PROJECTS_CATALOG = [
+    {"id": "purva-heritage", "name": "Purva Heritage", "city": "Bengaluru", "location": "Kudlu Gate, Bengaluru", "image": "/purva_heritage.jpg", "status": "Newly Launched", "type": "Residential"},
+    {"id": "northern-lights", "name": "Northern Lights by Puravankara | KVN", "city": "Bengaluru", "location": "KIADB, Aerospace Park, Bengaluru", "image": "/purva_complex.jpg", "status": "Newly Launched", "type": "Residential"},
+    {"id": "purva-silversky", "name": "Purva Silversky", "city": "Bengaluru", "location": "Electronic City, Bengaluru", "image": "/purva_complex.jpg", "status": "Newly Launched", "type": "Residential"},
+    {"id": "purva-blubelle", "name": "Purva Blubelle", "city": "Bengaluru", "location": "Magadi Road, Bengaluru", "image": "/purva_heritage.jpg", "status": "Ongoing", "type": "Residential"},
+    {"id": "purva-orient-grand", "name": "Purva Orient Grand", "city": "Bengaluru", "location": "Lalbagh Road, Bengaluru", "image": "/purva_heritage.jpg", "status": "Ongoing", "type": "Luxury Residential"},
+    {"id": "purva-atmosphere", "name": "Purva Atmosphere", "city": "Bengaluru", "location": "Thanisandra Road, Bengaluru", "image": "/purva_complex.jpg", "status": "Ongoing", "type": "Residential"},
+    {"id": "bengaluru-corporate", "name": "Bengaluru Corporate Head Office", "city": "Bengaluru", "location": "Ulsoor Road, Bengaluru", "image": "/puravankara_building.png", "status": "Headquarters", "type": "Corporate Operations"},
+    {"id": "purva-somerset", "name": "Purva Somerset House", "city": "Chennai", "location": "Guindy, Chennai", "image": "/purva_heritage.jpg", "status": "Ongoing", "type": "Luxury Residential"},
+    {"id": "purva-windermere", "name": "Purva Windermere", "city": "Chennai", "location": "Pallikaranai, Chennai", "image": "/purva_complex.jpg", "status": "Completed / Handover", "type": "Residential"},
+    {"id": "purva-clermont", "name": "Purva Clermont", "city": "Mumbai", "location": "Chembur, Mumbai", "image": "/purva_complex.jpg", "status": "Newly Launched", "type": "Residential"},
+    {"id": "purva-silversands", "name": "Purva Silversands", "city": "Pune", "location": "Mundhwa, Pune", "image": "/purva_heritage.jpg", "status": "Ongoing", "type": "Residential"},
+    {"id": "purva-summit", "name": "Purva Summit", "city": "Hyderabad", "location": "HITEC City, Hyderabad", "image": "/purva_complex.jpg", "status": "Commercial & Tech", "type": "Commercial"},
+    {"id": "purva-grandbay", "name": "Purva GrandBay", "city": "Kochi", "location": "Marine Drive, Kochi", "image": "/purva_bengaluru_balcony.jpg", "status": "Completed", "type": "Luxury Waterfront"},
+    {"id": "purva-amaiti", "name": "Purva Amaiti", "city": "Coimbatore", "location": "Singanallur, Coimbatore", "image": "/purva_complex.jpg", "status": "Ongoing", "type": "Residential"}
+]
+
+@app.get("/api/projects")
+async def get_projects(city: Optional[str] = None):
+    """
+    Fetch all Puravankara projects with images, addresses, and status.
+    Attempts to read from Supabase 'projects' table if present; falls back to master catalog.
+    """
+    try:
+        query = supabase.table("projects").select("*")
+        if city:
+            query = query.eq("city", city)
+        res = query.execute()
+        if res.data and len(res.data) > 0:
+            return {"projects": res.data, "source": "database"}
+    except Exception:
+        # Table not created in Supabase yet or query error: gracefully fallback to catalog
+        pass
+
+    filtered = PROJECTS_CATALOG
+    if city:
+        filtered = [p for p in PROJECTS_CATALOG if p["city"].lower() == city.lower()]
+    return {"projects": filtered, "source": "catalog"}
+
+
 @app.get("/api/agents/warmup")
 async def warmup_rag():
     """Endpoint to trigger RAG initialization if not already done."""

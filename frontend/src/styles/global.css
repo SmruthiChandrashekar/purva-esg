@@ -14,38 +14,42 @@
   --ease: cubic-bezier(.3, .7, .2, 1);
   --t: .18s;
 
-  /* Brand Palette (Puravankara GRM) */
-  --navy: #142841;
-  --navy-2: #1f3b5f;
+  /* Brand Palette (Puravankara Official Swatch) */
+  --navy: #13273F; /* PANTONE 7546C Mystic Navy */
+  --navy-2: #1e3a5f;
   --navy-light: #2c4f7c;
-  --navy-deep: #0b1726;
-  --slate: #798da6;
-  --slate-light: #9db0c6;
-  --slate-subtle: rgba(121, 141, 166, 0.15);
-  --cream: #e5ded2;
-  --cream-light: #f8f6f1;
-  --burgundy: #a82646;
-  --burgundy-h: #8e1d38;
-  --red: #a82646;
+  --navy-deep: #0a1726;
+  --slate: #6D8299; /* Slate Blue */
+  --slate-light: #8ea3ba;
+  --slate-subtle: rgba(109, 130, 153, 0.15);
+  --cream: #E5DAC3; /* PANTONE 12-1006 TCX Mother of Pearl */
+  --cream-light: #f7f3ec;
+  --burgundy: #991B1B; /* Rich Pure Dark Red */
+  --burgundy-h: #7F1D1D;
+  --red: #991B1B;
+  --pantone-mother-of-pearl: #E5DAC3;
+  --pantone-mystic-navy: #13273F;
+  --pantone-red-inferno: #991B1B;
+  --pantone-slate-blue: #6D8299;
 
   /* Light Theme (Primarily Navy Blue with Warm Sand & Lighter Burgundy Accent) */
   --bg: #f8f7f4;
   --surface: #ffffff;
   --surface-2: #f0ece3;
   --surface-warm: #e5ded2;
-  --text: #142841;
+  --text: #13273F;
   --muted: #5e6f84;
   --line: #ded8cd;
-  --primary: #142841;
-  --primary-h: #0d1b2d;
+  --primary: #13273F;
+  --primary-h: #0b1726;
   --on-primary: #ffffff;
-  --accent: #a82646;
-  --accent-h: #8e1d38;
-  --ring: #798da6;
+  --accent: #991B1B;
+  --accent-h: #7F1D1D;
+  --ring: #6D8299;
   --ok: #15803d;
   --warn: #b45309;
-  --err: #a82646;
-  --info: #142841;
+  --err: #991B1B;
+  --info: #13273F;
   --sh-1: 0 1px 3px rgba(20, 40, 65, .08), 0 1px 2px rgba(20, 40, 65, .04);
   --sh-2: 0 10px 25px -5px rgba(20, 40, 65, .14), 0 4px 10px -2px rgba(20, 40, 65, .06);
   --sh-3: 0 25px 60px -15px rgba(20, 40, 65, .38);

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import PurvaFooter from "../components/PurvaFooter";
+import { findProjectByNameOrId } from "../config/projectsData";
 import "./PurvaSimulation.css";
 import "./ProjectDetail.css";
 
@@ -17,15 +18,18 @@ const AMENITIES_LIST = [
 
 const ProjectDetail = () => {
   const navigate = useNavigate();
+  const { projectId } = useParams();
+  const matchedProject = findProjectByNameOrId(projectId);
+  const projectName = matchedProject?.name || "Purva Heritage";
+
   const [activeTourTab, setActiveTourTab] = useState("location");
   const [activeAmenityTab, setActiveAmenityTab] = useState("indoor");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentMenuLevel, setCurrentMenuLevel] = useState("main");
 
-  const projectName = "Purva Heritage";
-
   const handleGoToGrievance = () => {
-    // Navigates directly into the grievance filing flow for Purva Heritage
+    // Navigates directly into the grievance filing flow for the project
+    sessionStorage.setItem("purva_selected_project", projectName);
     navigate(`/lodge-selection?project=${encodeURIComponent(projectName)}`);
   };
 

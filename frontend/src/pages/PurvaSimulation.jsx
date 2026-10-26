@@ -144,7 +144,10 @@ const PurvaSimulation = () => {
             {/* Quick Switcher back to GRM portal */}
             <div
               className="purva-portal-switch"
-              onClick={() => navigate("/dashboard")}
+              onClick={() => {
+                sessionStorage.removeItem("purva_selected_project");
+                navigate("/grm");
+              }}
               title="Return to Grievance Redressal System"
             >
               Go to Complaints Portal &rarr;

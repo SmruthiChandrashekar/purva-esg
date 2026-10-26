@@ -1,0 +1,282 @@
+/* ─────────────────────────────────────────────────────────────
+   Stakeholder Hub Portal CSS
+   Side-by-Side Clean Layout:
+   - Left: Lodge a Complaint + Track a Complaint
+   - Right: Ask Purva (AI Assistant)
+   Colors:
+   - Mystic Navy: #13273F
+   - Lighter Dark Red / Crimson: #a82646 (hover #8e1d38)
+   - Mother of Pearl: #E5DAC3
+   - Slate: #6D8299
+   ───────────────────────────────────────────────────────────── */
+
+.stakeholder-hub {
+  background-color: #faf9f6;
+  min-height: 85vh;
+}
+
+/* ── Hero Banner ── */
+.hub-hero {
+  background: linear-gradient(135deg, #0d1b2d 0%, #13273F 100%);
+  color: #ffffff;
+  border-bottom: 2px solid #E5DAC3;
+}
+
+.hub-badge-role {
+  background-color: rgba(229, 218, 195, 0.2);
+  color: #E5DAC3;
+  border: 1px solid rgba(229, 218, 195, 0.4);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.hub-badge-corp {
+  background-color: rgba(153, 27, 27, 0.35);
+  color: #fee2e2;
+  border: 1px solid rgba(153, 27, 27, 0.55);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.hub-hero-title {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.3px;
+}
+
+.hub-hero-subtitle {
+  color: #c5d3e6;
+  font-size: 0.95rem;
+}
+
+.hub-btn-dashboard {
+  background-color: #E5DAC3;
+  color: #13273F;
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.hub-btn-dashboard:hover {
+  background-color: #f0e6d2;
+  color: #13273F;
+  transform: translateY(-1px);
+}
+
+/* ── Action Cards (Left Column) ── */
+.hub-action-card {
+  background-color: #ffffff;
+  border: 1px solid #E5DAC3;
+  border-radius: 14px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 3px 14px rgba(19, 39, 63, 0.04);
+  transition: all 0.2s ease;
+}
+
+.hub-action-card:hover {
+  box-shadow: 0 6px 20px rgba(19, 39, 63, 0.07);
+}
+
+.hub-card-lodge {
+  border-top: 4px solid #991B1B;
+}
+
+.hub-card-track {
+  border-top: 4px solid #13273F;
+}
+
+.hub-card-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.hub-icon-wrapper {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.hub-icon-inferno {
+  background-color: rgba(153, 27, 27, 0.12);
+  color: #991B1B;
+}
+
+.hub-icon-navy {
+  background-color: rgba(19, 39, 63, 0.1);
+  color: #13273F;
+}
+
+.hub-card-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #13273F;
+  margin-bottom: 2px;
+}
+
+.hub-card-desc {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+.hub-topics-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hub-topic-chip {
+  font-size: 11px;
+  font-weight: 600;
+  background-color: #f7f5f0;
+  color: #13273F;
+  border: 1px solid #E5DAC3;
+  padding: 4px 10px;
+  border-radius: 16px;
+}
+
+/* ── Buttons ── */
+.btn.hub-btn-inferno {
+  background-color: #991B1B;
+  color: #ffffff;
+  border: none;
+  font-weight: 700;
+  font-size: 0.92rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn.hub-btn-inferno:hover {
+  background-color: #7F1D1D;
+  color: #ffffff;
+}
+
+.btn.hub-btn-navy {
+  background-color: #13273F;
+  color: #ffffff;
+  border: none;
+  font-size: 0.9rem;
+  border-radius: 0 8px 8px 0 !important;
+  transition: all 0.2s ease;
+}
+
+.btn.hub-btn-navy:hover {
+  background-color: #1c395c;
+  color: #ffffff;
+}
+
+.hub-track-input {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px 0 0 8px !important;
+  padding: 9px 12px;
+  font-size: 0.9rem;
+}
+
+.hub-track-input:focus {
+  border-color: #13273F;
+  box-shadow: 0 0 0 3px rgba(19, 39, 63, 0.1);
+}
+
+.hub-link-subtle {
+  font-size: 0.84rem;
+  color: #6D8299;
+  text-decoration: none;
+}
+
+.hub-link-subtle:hover {
+  color: #13273F;
+  text-decoration: underline;
+}
+
+.hub-link-navy {
+  font-size: 0.86rem;
+  color: #13273F;
+  text-decoration: none;
+}
+
+.hub-link-navy:hover {
+  text-decoration: underline;
+}
+
+/* ── Right Column: Ask Purva Chatbot Card ── */
+.hub-chatbot-card {
+  background: #ffffff;
+  border: 1px solid #E5DAC3;
+  border-top: 4px solid #991B1B;
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 3px 14px rgba(19, 39, 63, 0.04);
+}
+
+.hub-purva-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  border: 2px solid #E5DAC3;
+  padding: 3px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.hub-live-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 11px;
+  height: 11px;
+  background-color: #16a34a;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+}
+
+.hub-question-btn {
+  background-color: #fdfcf9;
+  border: 1px solid #eedec4;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #13273F;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+}
+
+.hub-question-btn:hover {
+  background-color: #E5DAC3;
+  border-color: #d8c39e;
+  transform: translateX(3px);
+}
+
+.hub-chat-input {
+  border: 1px solid #cbd5e1;
+  padding: 9px 12px;
+  font-size: 0.9rem;
+  border-radius: 8px 0 0 8px !important;
+}
+
+.hub-chat-input:focus {
+  border-color: #991B1B;
+  box-shadow: 0 0 0 3px rgba(153, 27, 27, 0.12);
+}

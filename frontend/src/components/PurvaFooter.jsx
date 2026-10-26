@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import "./PurvaFooter.css";
 
-const PurvaFooter = () => {
+const PurvaFooter = ({ projectName = null }) => {
   const [showOnlineBadge, setShowOnlineBadge] = useState(true);
 
   const scrollToTop = () => {
@@ -107,7 +107,12 @@ const PurvaFooter = () => {
             <ul className="purva-footer-links-list">
               <li>
                 <Link
-                  to="/lodge-selection?project=Purva+Heritage"
+                  to={projectName ? `/lodge-selection?project=${encodeURIComponent(projectName)}` : "/lodge-selection"}
+                  onClick={() => {
+                    if (!projectName) {
+                      sessionStorage.removeItem("purva_selected_project");
+                    }
+                  }}
                   style={{ color: "#0b3558", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "6px" }}
                 >
                   <span>&#9878;</span> File a Complaint

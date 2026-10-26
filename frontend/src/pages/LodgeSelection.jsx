@@ -5,7 +5,7 @@ import "./LodgeSelection.css";
 function LodgeSelection() {
   const { t } = useLanguage();
   const [searchParams] = useSearchParams();
-  const projectParam = searchParams.get("project");
+  const projectParam = searchParams.get("project") || sessionStorage.getItem("purva_selected_project");
   const querySuffix = projectParam ? `?project=${encodeURIComponent(projectParam)}` : "";
 
   return (

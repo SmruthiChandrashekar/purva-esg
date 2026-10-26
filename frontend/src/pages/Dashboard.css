@@ -1,12 +1,18 @@
 .btn.dash-outline-btn {
-  --bs-btn-border-color: #002b66;
-  --bs-btn-hover-border-color: #002b66;
-  --bs-btn-active-border-color: #002b66;
-  --bs-btn-disabled-border-color: #002b66;
-  --bs-btn-color: #002b66;
-  --bs-btn-hover-color: #002b66;
-  --bs-btn-active-color: #002b66;
-  --bs-btn-disabled-color: #002b66;
+  --bs-btn-border-color: #13273F;
+  --bs-btn-hover-border-color: #13273F;
+  --bs-btn-active-border-color: #13273F;
+  --bs-btn-disabled-border-color: #13273F;
+  --bs-btn-color: #13273F;
+  --bs-btn-hover-color: #ffffff;
+  --bs-btn-hover-bg: #13273F;
+  --bs-btn-active-bg: #0b1726;
+  --bs-btn-disabled-color: #13273F;
+}
+
+.dash-stat-card {
+  border: 1px solid #E5DAC3 !important;
+  border-radius: 14px;
 }
 
 td.dash-cell {

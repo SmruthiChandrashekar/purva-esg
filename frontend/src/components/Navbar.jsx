@@ -46,9 +46,15 @@ function Navbar() {
             <span className="d-inline-block rounded-circle nav-live-dot"></span>
           </Link>
 
-          <Link to={user ? "/grm" : "/"} className="me-4 text-decoration-none nav-link-custom">
-            {user ? t("dashboard") : t("home")}
+          <Link to={user ? "/grm" : "/"} className={`me-4 text-decoration-none nav-link-custom ${location.pathname === "/grm" || location.pathname === "/" ? "is-active" : ""}`}>
+            {t("home")}
           </Link>
+
+          {user && (
+            <Link to="/dashboard" className={`me-4 text-decoration-none nav-link-custom ${location.pathname === "/dashboard" ? "is-active" : ""}`}>
+              {t("dashboard")}
+            </Link>
+          )}
 
           <Link to="/track" className="me-4 text-decoration-none nav-link-custom">
             {t("trackStatus")}
