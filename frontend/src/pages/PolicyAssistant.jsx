@@ -1,0 +1,830 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthProvider';
+import { apiClient } from '../services/api';
+import "./PolicyAssistant.css";
+import { SINGLE_DEPARTMENT_MODE } from "../config/features";
+
+/**
+ * Formats RAG text: bold, bullets, source citations.
+ */
+const formatBotMessage = (text) => {
+  if (!text) return { __html: '' };
+  let formatted = text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(?:\s|^)\*\s+(.*?)(?=(?:\s\*|$))/g, '<br/>• $1')
+    .replace(/(Sources?:)/gi, '<br/><br/><strong style="color: #6c757d; font-size: 0.9em;">$1</strong>')
+    .replace(/\n/g, '<br/>');
+  return { __html: formatted };
+};
+
+function PolicyAssistant() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { langCode, t } = useLanguage();
+  const { user, userDetails } = useAuth();
+
+  // Chat state
+  const [sessionId, setSessionId] = useState(null);
+  const [sessions, setSessions] = useState([]);
+  const [messages, setMessages] = useState([
+    { id: 1, text: null, isBot: true, isGreeting: true }
+  ]);
+  const [inputValue, setInputValue] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // Voice state
+  const [listening, setListening] = useState(false);
+  const [recordSecs, setRecordSecs] = useState(0);
+  const [voiceError, setVoiceError] = useState('');
+  const [isTranscribing, setIsTranscribing] = useState(false);
+
+  const messagesEndRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const timerRef = useRef(null);
+  const shouldSendRef = useRef(true);
+  const clearErrorRef = useRef(null);
+  const isSendingRef = useRef(false);
+
+  const isSpeechSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  const fmtTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+  const suggestedPrompts = [
+    "What is POSH policy?",
+    "Can I report anonymously?",
+    "What qualifies as harassment?",
+    "How to file a complaint?",
+    "What is the grievance resolution timeline?",
+    "Who handles high-severity cases?"
+  ];
+
+  // ── Scroll to bottom ──────────────────────────────────────────────────
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isTyping]);
+
+  // ── Load chat history when user is logged in ───────────────────────────
+  // Always open on a fresh conversation; past chats stay available in the sidebar.
+  useEffect(() => {
+    if (user) loadAllSessions();
+  }, [user]);
+
+  // Warmup RAG on page load
+  useEffect(() => {
+    apiClient("/api/agents/warmup").catch(err => console.error("Warmup failed", err));
+  }, []);
+
+  // ── Session management ─────────────────────────────────────────────────
+  const loadAllSessions = async () => {
+    try {
+      const res = await apiClient("/api/chat/sessions");
+      if (res.ok) setSessions(await res.json());
+    } catch (err) { console.error("Failed to load sessions", err); }
+  };
+
+  const loadSessionMessages = async (id) => {
+    try {
+      const res = await apiClient(`/api/chat/session/${id}`);
+      if (res.ok) {
+        const msgs = await res.json();
+        if (msgs.length > 0) {
+          setMessages(msgs.map(m => {
+            const meta = m.metadata || {};
+            return {
+              id: m.id,
+              text: m.message,
+              isBot: m.sender === 'assistant',
+              severity: meta.severity || '',
+              department: meta.department || '',
+              routed: meta.routed || false,
+              grievance_id: meta.grievance_id || '',
+              assigned_to: meta.assigned_to || '',
+              trigger_form: meta.trigger_form || false,
+              form_reason: meta.form_reason || '',
+              chatbot_resolved: meta.chatbot_resolved !== false,
+              can_escalate: meta.can_escalate || false,
+              source_type: meta.source_type || 'GENERAL_KNOWLEDGE',
+              policy_name: meta.policy_name || '',
+              intent: meta.intent || '',
+              condensed_message: meta.condensed_message || '',
+              original_query: meta.original_query || ''
+            };
+          }));
+        } else {
+          setMessages([{ id: 1, text: null, isBot: true, isGreeting: true }]);
+        }
+      }
+    } catch (err) { console.error("Failed to load messages", err); }
+  };
+
+  const [menuOpenSessionId, setMenuOpenSessionId] = useState(null);
+  const [editingSessionId, setEditingSessionId] = useState(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const [pinnedSessionIds, setPinnedSessionIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('purva_pinned_sessions');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (!e.target.closest('.pa-session-menu-container')) {
+        setMenuOpenSessionId(null);
+      }
+    };
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, []);
+
+  const togglePinSession = (e, id) => {
+    e.stopPropagation();
+    setPinnedSessionIds(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [id, ...prev];
+      try { localStorage.setItem('purva_pinned_sessions', JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+    setMenuOpenSessionId(null);
+  };
+
+  const startRename = (e, s) => {
+    e.stopPropagation();
+    setEditingSessionId(s.id);
+    setEditingTitle(s.title || "New Conversation");
+    setMenuOpenSessionId(null);
+  };
+
+  const handleSaveRename = async (e, id) => {
+    if (e) e.stopPropagation();
+    const cleanTitle = (editingTitle || '').trim();
+    if (!cleanTitle) {
+      setEditingSessionId(null);
+      return;
+    }
+    try {
+      await apiClient(`/api/chat/session/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title: cleanTitle })
+      });
+      setSessions(prev => prev.map(s => s.id === id ? { ...s, title: cleanTitle } : s));
+    } catch (err) {
+      console.error("Failed to rename session", err);
+    } finally {
+      setEditingSessionId(null);
+    }
+  };
+
+  const handleCancelRename = (e) => {
+    if (e) e.stopPropagation();
+    setEditingSessionId(null);
+  };
+
+  const handleNewConversation = () => {
+    setSessionId(null);
+    setMessages([{ id: 1, text: null, isBot: true, isGreeting: true }]);
+  };
+
+  const switchSession = (id) => {
+    if (editingSessionId) return;
+    setSessionId(id);
+    loadSessionMessages(id);
+  };
+
+  const deleteSession = async (e, id) => {
+    if (e) e.stopPropagation();
+    if (!window.confirm(t('confirmDeleteChat') || "Are you sure you want to delete this chat?")) return;
+    try {
+      const res = await apiClient(`/api/chat/session/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        if (id === sessionId) handleNewConversation();
+        setPinnedSessionIds(prev => prev.filter(x => x !== id));
+        loadAllSessions();
+      }
+    } catch (err) { console.error("Failed to delete session", err); }
+  };
+
+  // ── Voice recording ────────────────────────────────────────────────────
+  const stopTimer = () => { clearInterval(timerRef.current); timerRef.current = null; setRecordSecs(0); };
+
+  const showError = (msg) => {
+    clearTimeout(clearErrorRef.current);
+    setVoiceError(msg);
+    clearErrorRef.current = setTimeout(() => setVoiceError(''), 4000);
+  };
+
+  const startListening = async () => {
+    if (!isSpeechSupported || listening) return;
+    audioChunksRef.current = [];
+    shouldSendRef.current = true;
+    setVoiceError('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mediaRecorder.onstart = () => { setListening(true); setRecordSecs(0); timerRef.current = setInterval(() => setRecordSecs(s => s + 1), 1000); };
+      mediaRecorder.onstop = async () => {
+        setListening(false); stopTimer();
+        stream.getTracks().forEach(t => t.stop());
+        if (shouldSendRef.current && audioChunksRef.current.length > 0) {
+          setIsTranscribing(true);
+          const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const fd = new FormData(); fd.append('file', blob, 'recording.webm');
+          try {
+            const r = await apiClient('/api/agents/transcribe', { method: 'POST', body: fd });
+            if (!r.ok) throw new Error('Transcription failed');
+            const d = await r.json();
+            const transcript = typeof d.transcript === 'string' ? d.transcript : (d.transcript?.text || '');
+            if (transcript.trim()) handleSendMessage(transcript.trim());
+          } catch { showError("Couldn't transcribe audio. Try again."); }
+          finally { setIsTranscribing(false); }
+        }
+      };
+      mediaRecorder.start();
+    } catch { showError("Microphone access denied. Please allow mic in browser settings."); }
+  };
+
+  const stopListening = () => { shouldSendRef.current = true; if (mediaRecorderRef.current?.state !== 'inactive') mediaRecorderRef.current.stop(); };
+  const cancelListening = () => { shouldSendRef.current = false; if (mediaRecorderRef.current?.state !== 'inactive') mediaRecorderRef.current.stop(); setListening(false); stopTimer(); };
+
+  // ── Send message (RAG) ─────────────────────────────────────────────────
+  const handleSendMessage = async (text) => {
+    const trimmed = (text || '').trim();
+    if (!trimmed || isSendingRef.current || isTyping) return;
+
+    // Immediately acquire lock and update UI synchronously to prevent duplicate dispatches
+    isSendingRef.current = true;
+    setInputValue('');
+    setIsTyping(true);
+
+    let currentSessionId = sessionId;
+
+    if (!currentSessionId && user) {
+      try {
+        const sessRes = await apiClient("/api/chat/session", { method: "POST", body: JSON.stringify({}) });
+        if (sessRes.ok) { const ns = await sessRes.json(); currentSessionId = ns.id; setSessionId(currentSessionId); }
+      } catch (err) { console.error("Failed to create session", err); }
+    }
+
+    const newUserMsg = { id: Date.now(), text: trimmed, isBot: false };
+    setMessages(prev => [...prev, newUserMsg]);
+
+    if (currentSessionId) {
+      apiClient("/api/chat/message", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: currentSessionId, sender: "user", message: trimmed })
+      }).then(() => loadAllSessions());
+    }
+
+    try {
+      const res = await apiClient("/api/agents/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: trimmed, lang: langCode, session_id: currentSessionId || undefined }),
+      });
+      if (!res.ok) throw new Error("Backend error");
+      const data = await res.json();
+      let responseText = data.response || "Sorry, I couldn't find an answer.";
+      if (data.sources?.length > 0) {
+        responseText += `\n\n${t("sources") || "Sources"}: ${data.sources.map(s => `${s.source} (p.${s.page})`).join(", ")}`;
+      }
+      const botMsg = {
+        id: Date.now() + 1,
+        text: responseText,
+        isBot: true,
+        severity: data.severity ? data.severity.toLowerCase() : '',
+        department: data.department || '',
+        routed: data.routed || false,
+        grievance_id: data.grievance_id || '',
+        assigned_to: data.assigned_to || '',
+        trigger_form: data.trigger_form || false,
+        form_reason: data.form_reason || '',
+        chatbot_resolved: data.chatbot_resolved !== false,
+        can_escalate: data.can_escalate || false,
+        source_type: data.source_type || 'GENERAL_KNOWLEDGE',
+        policy_name: data.policy_name || '',
+        intent: data.intent || 'QUERY',
+        condensed_message: data.condensed_message || '',
+        original_query: trimmed
+      };
+      setMessages(prev => [...prev, botMsg]);
+      if (currentSessionId) {
+        apiClient("/api/chat/message", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: currentSessionId,
+            sender: "assistant",
+            message: responseText,
+            metadata: {
+              severity: botMsg.severity,
+              department: botMsg.department,
+              routed: botMsg.routed,
+              grievance_id: botMsg.grievance_id,
+              assigned_to: botMsg.assigned_to,
+              trigger_form: botMsg.trigger_form,
+              form_reason: botMsg.form_reason,
+              chatbot_resolved: botMsg.chatbot_resolved,
+              can_escalate: botMsg.can_escalate,
+              source_type: botMsg.source_type,
+              policy_name: botMsg.policy_name,
+              intent: botMsg.intent,
+              condensed_message: botMsg.condensed_message,
+              original_query: botMsg.original_query
+            }
+          })
+        });
+      }
+    } catch {
+      setMessages(prev => [...prev, { id: Date.now() + 1, text: "Sorry, I'm having trouble connecting to the policy engine. Please try again in a moment.", isBot: true }]);
+    } finally {
+      setIsTyping(false);
+      isSendingRef.current = false;
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (!isTyping && !isSendingRef.current) {
+        handleSendMessage(inputValue);
+      }
+    }
+  };
+
+  // ── Determine lodge route ──────────────────────────────────────────────
+  const getLodgeRoute = () => {
+    if (SINGLE_DEPARTMENT_MODE) return "/lodge-external";
+    if (!userDetails?.user_type) return "/lodge-selection";
+    switch (userDetails.user_type) {
+      case "Internal": return "/lodge-internal";
+      case "Contract": return "/lodge-contract";
+      case "External": return "/lodge-external";
+      default: return "/lodge-selection";
+    }
+  };
+
+  const stripEmojis = (str) => str ? str.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}]/gu, '').replace(/\s+/g, ' ').trim() : '';
+
+  const isMetaPhrase = (text) => {
+    if (!text) return true;
+    const lower = text.trim().toLowerCase();
+    const metaPatterns = [
+      /^i\s+want\s+to\s+file(\s+a)?\s+grievance/i,
+      /^file(\s+a)?\s+grievance/i,
+      /^lodge(\s+a)?\s+grievance/i,
+      /^register(\s+a)?\s+complaint/i,
+      /^raise(\s+a)?\s+ticket/i,
+      /^open(\s+the)?\s+form/i,
+      /^submit(\s+a)?\s+complaint/i,
+      /^help\s*$/i,
+      /^grievance\s*$/i,
+      /^complaint\s*$/i,
+      /^yes\s*$/i,
+      /^no\s*$/i,
+      /^ok\s*$/i,
+      /^okay\s*$/i
+    ];
+    return metaPatterns.some(p => p.test(lower));
+  };
+
+  const getQueryDescription = (msgItem) => {
+    const idx = messages.findIndex(m => m.id === msgItem?.id);
+    const limit = idx > 0 ? idx : messages.length;
+
+    // Collect all substantive user messages prior to this bot response
+    const userTexts = [];
+    for (let i = 0; i < limit; i++) {
+      if (!messages[i].isBot && messages[i].text) {
+        const cleaned = stripEmojis(messages[i].text);
+        if (cleaned && !isMetaPhrase(cleaned)) {
+          userTexts.push(cleaned);
+        }
+      }
+    }
+
+    // Check for synthesized summary from agent
+    const summary = msgItem?.condensed_message ? stripEmojis(msgItem.condensed_message) : '';
+
+    if (summary && !isMetaPhrase(summary)) {
+      if (userTexts.length > 1) {
+        return `${summary}\n\nKey Details Provided in Chat:\n${userTexts.map(t => `• ${t}`).join('\n')}`;
+      }
+      return summary;
+    }
+
+    // If no condensed summary, combine all substantive user messages
+    if (userTexts.length > 0) {
+      return userTexts.join('\n');
+    }
+
+    return stripEmojis(msgItem?.original_query || '');
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────
+  // A low-priority form submission arrives here with its text: ask Purva about it once.
+  const prefillSentRef = useRef(false);
+  useEffect(() => {
+    const prefill = location.state?.prefill;
+    if (!prefill || prefillSentRef.current) return;
+    prefillSentRef.current = true;
+    navigate(location.pathname, { replace: true, state: null });
+    handleSendMessage(prefill);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="pa-container">
+
+      {/* ── LEFT SIDEBAR: Chat History ─────────────────────────────────── */}
+      <aside className={`pa-sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <div className="pa-sidebar-header">
+          <h6 className="mb-0 fw-bold d-flex align-items-center gap-2 text-white">
+            <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2z"/></svg>
+            History
+          </h6>
+          <button className="pa-sidebar-close text-white" onClick={() => setSidebarOpen(false)}>
+            <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+          </button>
+        </div>
+
+        <button className="pa-new-chat-btn" onClick={handleNewConversation}>
+          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
+          New Conversation
+        </button>
+
+        <div className="pa-sessions-list">
+          {!user ? (
+            <div className="pa-sessions-empty">
+              <p>Login to save chat history</p>
+            </div>
+          ) : sessions.length === 0 ? (
+            <div className="pa-sessions-empty">
+              <svg width="40" height="40" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" opacity="0.4"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <p>No past conversations</p>
+            </div>
+          ) : (
+            [...sessions]
+              .sort((a, b) => {
+                const aPinned = pinnedSessionIds.includes(a.id);
+                const bPinned = pinnedSessionIds.includes(b.id);
+                if (aPinned && !bPinned) return -1;
+                if (!aPinned && bPinned) return 1;
+                return new Date(b.updated_at || 0) - new Date(a.updated_at || 0);
+              })
+              .map(s => {
+                const isPinned = pinnedSessionIds.includes(s.id);
+                const isEditing = editingSessionId === s.id;
+                const isMenuOpen = menuOpenSessionId === s.id;
+
+                return (
+                  <div
+                    key={s.id}
+                    className={`pa-session-item ${s.id === sessionId ? 'active' : ''} ${isPinned ? 'pinned' : ''}`}
+                    onClick={() => switchSession(s.id)}
+                  >
+                    <div className="pa-session-content">
+                      {isEditing ? (
+                        <div className="pa-rename-box" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            className="pa-rename-input"
+                            value={editingTitle}
+                            autoFocus
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveRename(e, s.id);
+                              if (e.key === 'Escape') handleCancelRename(e);
+                            }}
+                          />
+                          <div className="d-flex gap-1 mt-1">
+                            <button className="pa-rename-save-btn" onClick={(e) => handleSaveRename(e, s.id)}>Save</button>
+                            <button className="pa-rename-cancel-btn" onClick={(e) => handleCancelRename(e)}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="pa-session-title d-flex align-items-center gap-1">
+                            {isPinned && (
+                              <svg width="12" height="12" fill="#60a5fa" viewBox="0 0 16 16" className="flex-shrink-0" title="Pinned">
+                                <path d="M4.146.146A.5.5 0 0 1 4.5 0h7a.5.5 0 0 1 .5.5c0 .68-.342 1.174-.646 1.479-.283.284-.53.53-.53.967v2.094l1.324 1.324a.5.5 0 0 1 .146.354v1.5a.5.5 0 0 1-.5.5h-4.5v4.5a.5.5 0 0 1-1 0V9H2.5a.5.5 0 0 1-.5-.5v-1.5a.5.5 0 0 1 .146-.354L3.47 5.04V2.946c0-.437-.247-.683-.53-.967C2.636 1.674 2.294 1.18 2.294.5a.5.5 0 0 1 .5-.5h1.352z"/>
+                              </svg>
+                            )}
+                            <span className="text-truncate">{s.title || "New Conversation"}</span>
+                          </div>
+                          <div className="pa-session-date">{new Date(s.updated_at).toLocaleDateString()}</div>
+                        </div>
+                      )}
+                    </div>
+
+                    {!isEditing && (
+                      <div className="pa-session-menu-container" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className={`pa-three-dots-btn ${isMenuOpen ? 'active' : ''}`}
+                          title="Options"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuOpenSessionId(isMenuOpen ? null : s.id);
+                          }}
+                        >
+                          <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                          </svg>
+                        </button>
+
+                        {isMenuOpen && (
+                          <div className="pa-session-dropdown">
+                            <button className="pa-dropdown-item" onClick={(e) => startRename(e, s)}>
+                              <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                              <span>Rename</span>
+                            </button>
+                            <button className="pa-dropdown-item" onClick={(e) => togglePinSession(e, s.id)}>
+                              <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 2l3 7h6l-5 4 2 8-6-4-6 4 2-8-5-4h6z"/></svg>
+                              <span>{isPinned ? 'Unpin' : 'Pin to Top'}</span>
+                            </button>
+                            <div className="pa-dropdown-divider"></div>
+                            <button className="pa-dropdown-item text-danger" onClick={(e) => { setMenuOpenSessionId(null); deleteSession(e, s.id); }}>
+                              <svg width="13" height="13" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+          )}
+        </div>
+      </aside>
+
+      {/* ── MAIN CHAT AREA ─────────────────────────────────────────────── */}
+      <main className="pa-main">
+
+        {/* Top bar */}
+        <div className="pa-topbar">
+          <div className="d-flex align-items-center gap-2">
+            {!sidebarOpen && (
+              <button className="pa-icon-btn" onClick={() => setSidebarOpen(true)} title="Show history">
+                <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path fillRule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/></svg>
+              </button>
+            )}
+            <div className="purva-avatar-topbar">
+              <img src="/purva-logo.svg" alt="Purva" className="purva-avatar-svg w-100 h-100 rounded-circle object-fit-contain" />
+            </div>
+            <div>
+              <h5 className="mb-0 fw-bold pa-topbar-title text-white">Purva</h5>
+              <small className="pa-topbar-subtitle text-white-50">Your Policy & Grievance Companion</small>
+            </div>
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <span className="pa-status-dot"></span>
+            <small className="pa-topbar-status text-white">Online</small>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div className="pa-messages">
+          {/* Welcome / empty state */}
+          {messages.length <= 1 && (
+            <div className="pa-welcome">
+              <div className="purva-welcome-avatar">
+                <img src="/purva-logo.svg" alt="Purva" className="purva-welcome-svg w-100 h-100 rounded-circle object-fit-contain" />
+              </div>
+              <h4 className="fw-bold mb-2">Hi, I'm Purva</h4>
+              <p className="text-muted mb-4">Your companion for company policies, grievance procedures, POSH compliance, and filing complaints — I'm here to help!</p>
+              <div className="pa-prompts-grid">
+                {suggestedPrompts.map((prompt, idx) => (
+                  <button
+                    key={idx}
+                    className="pa-prompt-chip"
+                    onClick={() => handleSendMessage(prompt)}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Message bubbles */}
+          {messages.map((msg) => (
+            <div key={msg.id} className={`pa-msg-row ${msg.isBot ? 'bot' : 'user'}`}>
+              {msg.isBot && (
+                <div className="pa-msg-avatar purva-msg-avatar">
+                  <img className="rounded-circle object-fit-contain pa-msg-avatar-img" src="/purva-logo.svg" alt="Purva" />
+                </div>
+              )}
+              <div className={`pa-msg-bubble ${msg.isBot ? 'bot' : 'user'}`}>
+                {msg.isGreeting ? (
+                  t('chatbotGreeting') || `Hi${userDetails?.name ? ` ${userDetails.name.split(' ')[0]}` : ''}! I'm Purva, your AI Grievance Companion. How can I help you today?`
+                ) : msg.isBot ? (
+                  <>
+                    <div dangerouslySetInnerHTML={formatBotMessage(msg.text)} />
+                    {msg.routed && msg.department && !SINGLE_DEPARTMENT_MODE && (
+                      <div className={`pa-routing-badge ${(msg.severity || 'high').toLowerCase() === 'medium' ? 'medium' : 'high'}`}>
+                        <span className="pa-routing-dot"></span>
+                        <span>{((msg.severity || 'High').charAt(0).toUpperCase() + (msg.severity || 'high').slice(1).toLowerCase())} Severity → Routed to <strong>{msg.department}</strong></span>
+                        {msg.grievance_id && <span className="pa-routing-id">ID: {String(msg.grievance_id).slice(0, 5)}</span>}
+                      </div>
+                    )}
+                    {msg.severity === 'low' && !msg.isGreeting && (
+                      <div className={`pa-routing-badge low d-flex align-items-center gap-1 ${msg.source_type === "POLICY" ? "is-policy" : "is-general"}`}>
+                        <span className="pa-routing-dot"></span>
+                        <span>{msg.source_type === 'POLICY' ? `Policy: ${msg.policy_name || 'Official Policy'}` : (msg.intent === 'GRIEVANCE' ? 'Purva Resolution' : 'General Guidance')}</span>
+                      </div>
+                    )}
+
+                    {/* TRIGGER GRIEVANCE FORM CARD FOR HIGH / MEDIUM COMPLAINTS */}
+                    {msg.trigger_form && (msg.severity === 'high' || msg.severity === 'medium' || msg.form_reason === 'high_severity' || msg.form_reason === 'medium_severity') && (
+                      <div 
+                        className="mt-3 p-3 rounded-3 text-start shadow-sm pa-advisory is-complaint"
+                      >
+                        <div className="d-flex align-items-center justify-content-between mb-2">
+                          <span 
+                            className={`badge rounded-pill px-2 py-1 text-uppercase fw-bold text-white fs-10 pa-severity-badge${msg.severity === "high" ? " is-high" : ""}`}
+                          >
+                            {msg.severity ? `${msg.severity} Severity Complaint` : 'Formal Complaint'}
+                          </span>
+                          {msg.department && !SINGLE_DEPARTMENT_MODE && (
+<span className="small text-muted fw-semibold">
+Dept: {msg.department}
+</span>
+)}
+                        </div>
+                        <p className="small mb-3 fw-semibold text-dark">
+                          Formal grievance lodging is required for prioritized administrative investigation and SLA tracking.
+                        </p>
+                        <button
+                          type="button"
+                          className="btn btn-sm w-100 fw-bold shadow-sm rounded-pill d-flex align-items-center justify-content-center gap-2 bg-navy text-white border-0 fs-13 pa-escalate-btn"
+                          onClick={() => {
+                            navigate(getLodgeRoute(), {
+                              state: {
+                                description: getQueryDescription(msg),
+                                department: msg.department || '',
+                                source: 'CHATBOT_ESCALATION',
+                                severity: msg.severity || 'MEDIUM'
+                              }
+                            });
+                          }}
+                        >
+                          <span>Open Grievance Form</span>
+                          <span>→</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* SATISFACTION / ESCALATION CARD FOR LOW SEVERITY GRIEVANCES */}
+                    {msg.can_escalate && (
+                      <div 
+                        className="mt-3 p-3 rounded-3 text-start shadow-sm pa-advisory is-guidance"
+                      >
+                        <div className="d-flex align-items-center gap-1 mb-1">
+                          <span className="badge rounded-pill px-2 py-1 fw-bold pa-guidance-badge">
+                            Resolution Guidance
+                          </span>
+                        </div>
+                        <p className="small mb-3 text-muted pa-guidance-text">
+                          Did this address your concern? If this explanation does not resolve the issue, you may lodge an official grievance ticket for formal department handling.
+                        </p>
+                        <button
+                          type="button"
+                          className="btn btn-outline-dark btn-sm w-100 fw-semibold rounded-pill d-flex align-items-center justify-content-center gap-2 pa-followup-btn"
+                          onClick={() => {
+                            navigate(getLodgeRoute(), {
+                              state: {
+                                description: getQueryDescription(msg),
+                                department: msg.department || '',
+                                source: 'CHATBOT_ESCALATION',
+                                severity: 'LOW'
+                              }
+                            });
+                          }}
+                        >
+                          <span>Not satisfied? Lodge Formal Grievance</span>
+                          <span>→</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* REDIRECT TO FORM FOR UNRESOLVED LOW COMPLAINTS */}
+                    {!msg.can_escalate && msg.trigger_form && (msg.form_reason === 'unresolved_low_query' || (!msg.chatbot_resolved && msg.severity === 'low')) && (
+                      <div 
+                        className="mt-3 p-3 rounded-3 text-start shadow-sm pa-advisory is-unresolved"
+                      >
+                        <div className="d-flex align-items-center gap-1 mb-2">
+                          <span className="badge bg-secondary-subtle text-dark rounded-pill px-2 py-1 fs-10 fw-semibold">
+                            Policy Unresolved
+                          </span>
+                        </div>
+                        <p className="small mb-3 text-muted">
+                          The automated assistant could not resolve this from official policy documents. Would you like to submit an official ticket?
+                        </p>
+                        <button
+                          type="button"
+                          className="btn btn-outline-dark btn-sm w-100 fw-semibold rounded-pill d-flex align-items-center justify-content-center gap-2 pa-followup-btn"
+                          onClick={() => {
+                            navigate(getLodgeRoute(), {
+                              state: {
+                                description: getQueryDescription(msg),
+                                department: msg.department || '',
+                                source: 'CHATBOT_ESCALATION',
+                                severity: 'LOW'
+                              }
+                            });
+                          }}
+                        >
+                          <span>Lodge as Formal Grievance</span>
+                          <span>→</span>
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  msg.text
+                )}
+              </div>
+            </div>
+          ))}
+
+          {/* Typing indicator */}
+          {isTyping && (
+            <div className="pa-msg-row bot">
+              <div className="pa-msg-avatar purva-msg-avatar">
+                <img className="rounded-circle object-fit-contain pa-msg-avatar-img" src="/purva-logo.svg" alt="Purva" />
+              </div>
+              <div className="pa-msg-bubble bot pa-typing">
+                <span className="pa-dot"></span>
+                <span className="pa-dot"></span>
+                <span className="pa-dot"></span>
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input area */}
+        <div className="pa-input-area">
+          {voiceError && (
+            <div className="pa-voice-error">
+              <span>{voiceError}</span>
+              <button onClick={() => setVoiceError('')}>×</button>
+            </div>
+          )}
+
+          {listening ? (
+            <div className="pa-recording-bar">
+              <button className="pa-icon-btn text-muted" onClick={cancelListening} title="Discard">
+                <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+              </button>
+              <div className="pa-recording-pulse"></div>
+              <span className="pa-recording-time">{fmtTime(recordSecs)}</span>
+              <div className="pa-rec-spacer"></div>
+              <button className="pa-send-btn" onClick={stopListening} title="Stop and send">
+                <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576zm6.787-8.201L1.591 6.602l4.339 2.76 7.494-7.493Z"/></svg>
+              </button>
+            </div>
+          ) : (
+            <div className="pa-input-row">
+              <input
+                type="text"
+                className="pa-input"
+                placeholder={isTranscribing ? "Transcribing audio..." : (t('chatbotPlaceholder') || "Type your question about policies...")}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={isTyping || isTranscribing}
+              />
+              <button
+                className="pa-icon-btn pa-mic-btn"
+                onClick={startListening}
+                disabled={!isSpeechSupported || isTyping || isTranscribing}
+                title="Voice input"
+              >
+                <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5z"/><path d="M10 8a2 2 0 1 1-4 0V3a2 2 0 1 1 4 0v5zM8 0a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V3a3 3 0 0 0-3-3z"/></svg>
+              </button>
+              <button
+                className="pa-send-btn"
+                onClick={() => handleSendMessage(inputValue)}
+                disabled={!inputValue.trim() || isTyping || isTranscribing}
+              >
+                <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576zm6.787-8.201L1.591 6.602l4.339 2.76 7.494-7.493Z"/></svg>
+              </button>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Mobile overlay when sidebar is open */}
+      {sidebarOpen && (
+        <div className="pa-mobile-overlay d-lg-none" onClick={() => setSidebarOpen(false)}></div>
+      )}
+    </div>
+  );
+}
+
+export default PolicyAssistant;

@@ -1,0 +1,645 @@
+/*
+ * apple.css — Apple-style design layer (loaded after global.css).
+ * Keeps the Puravankara palette; changes type, depth, motion and feedback.
+ * Principles: instant press feedback, critically damped motion, translucent
+ * chrome, size-specific tracking, graceful reduced-motion/transparency/contrast.
+ */
+
+:root {
+  /* Critically damped feel (no overshoot) for UI; slight settle for physical things. */
+  --ease-spring: cubic-bezier(.22, 1, .36, 1);
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --t-fast: 100ms;
+  --t-base: 280ms;
+
+  --material-bg: color-mix(in srgb, var(--surface) 72%, transparent);
+  --material-line: color-mix(in srgb, var(--surface) 55%, transparent);
+  --material-blur: saturate(180%) blur(22px);
+
+  --r-card: 18px;
+}
+
+html { font-optical-sizing: auto; }
+
+/* Everything below applies only inside the GRM app (Layout wraps it in .grm-ui);
+ * the Puravankara website pages keep their own styling. */
+.grm-ui {
+  /* System font first: ships optical sizing and tracking tables. */
+  --font-d: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  --font-b: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font-b);
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Typography: tight tracking and leading as size grows ──────────────── */
+@media all {
+  .grm-ui h1, .grm-ui h2, .grm-ui h3, .grm-ui h4, .grm-ui h5, .grm-ui h6,
+  .grm-ui .display-1, .grm-ui .display-2, .grm-ui .display-3, .grm-ui .display-4, .grm-ui .display-5, .grm-ui .display-6 {
+    font-family: var(--font-d);
+    font-weight: 700;
+  }
+  .grm-ui h1, .grm-ui .display-1, .grm-ui .display-2, .grm-ui .display-3 { letter-spacing: -0.03em; line-height: 1.05; }
+  .grm-ui h2, .grm-ui .display-4 { letter-spacing: -0.025em; line-height: 1.1; }
+  .grm-ui h3, .grm-ui .display-5 { letter-spacing: -0.02em; line-height: 1.15; }
+  .grm-ui h4, .grm-ui h5, .grm-ui .display-6 { letter-spacing: -0.012em; line-height: 1.25; }
+  .grm-ui h6, .grm-ui small, .grm-ui .small, .grm-ui .fs-12, .grm-ui .fs-13 { letter-spacing: 0.01em; }
+  .grm-ui .text-muted { letter-spacing: 0.005em; }
+}
+
+/* ── Translucent, sticky navigation: content scrolls under it ──────────── */
+.site-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  background-color: var(--material-bg);
+  -webkit-backdrop-filter: var(--material-blur);
+  backdrop-filter: var(--material-blur);
+  border-bottom: 1px solid var(--material-line);
+  box-shadow: none !important;
+}
+
+/* ── Surfaces ──────────────────────────────────────────────────────────── */
+.grm-ui .card {
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-1);
+}
+.grm-ui .card.shadow-lg, .grm-ui .card.shadow-sm {
+  box-shadow: 0 1px 2px rgba(20, 40, 65, .06), 0 12px 32px -12px rgba(20, 40, 65, .18) !important;
+}
+
+.grm-ui .form-control, .grm-ui .form-select {
+  border-radius: 12px;
+  transition: border-color var(--t-base) var(--ease-out), box-shadow var(--t-base) var(--ease-out);
+}
+.grm-ui .form-control:focus, .grm-ui .form-select:focus {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ring) 28%, transparent);
+}
+
+/* ── Instant press feedback (on pointer-down, not release) ─────────────── */
+.grm-ui .btn, .grm-ui .nav-link-custom, .grm-ui .nav-assistant-link, .grm-ui .auth-category-card, .grm-ui .cursor-pointer {
+  transition:
+    transform var(--t-fast) ease-out,
+    background-color var(--t-base) var(--ease-out),
+    box-shadow var(--t-base) var(--ease-out),
+    opacity var(--t-base) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.grm-ui .btn:active:not(:disabled), .grm-ui .auth-category-card:active, .grm-ui .cursor-pointer:active {
+  transform: scale(0.97);
+}
+.grm-ui .btn-primary:hover, .grm-ui .btn-accent:hover { transform: translateY(-1px); }
+.grm-ui .btn-primary:active, .grm-ui .btn-accent:active { transform: scale(0.97); }
+
+@keyframes apple-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Track page ────────────────────────────────────────────────────────── */
+.track-page .track-card { border-radius: 22px; }
+.track-id-input {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.track-page .track-step-dot {
+  transition: background-color var(--t-base) var(--ease-out), transform var(--t-base) var(--ease-spring);
+}
+.track-page .track-step-dot.is-done { transform: scale(1.04); }
+.track-page .track-step-line {
+  border-radius: 99px;
+  transition: background-color var(--t-base) var(--ease-out);
+}
+.track-step-label { letter-spacing: 0.01em; }
+
+/* ── Purva chat window: materialises from its trigger, exits the same way ─ */
+.chat-window {
+  transform-origin: bottom right;
+  transform: translateY(12px) scale(0.92);
+  opacity: 0;
+  filter: blur(8px);
+  transition:
+    transform var(--t-base) var(--ease-spring),
+    opacity 200ms ease-out,
+    filter var(--t-base) var(--ease-out);
+  border-radius: 22px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .08), 0 30px 70px -20px rgba(20, 40, 65, .45);
+}
+.chat-window.is-open {
+  transform: none;
+  opacity: 1;
+  filter: none;
+}
+.chatbot-btn:active { transform: scale(0.95); }
+
+/* ── Purva assistant page ──────────────────────────────────────────────── */
+#root .pa-container { background: var(--bg-color); }
+
+/* Frosted navy bar: content passes under it, no hard strip */
+#root .pa-topbar {
+  background: color-mix(in srgb, var(--navy) 88%, transparent);
+  -webkit-backdrop-filter: var(--material-blur);
+  backdrop-filter: var(--material-blur);
+  border-bottom: 1px solid rgba(255, 255, 255, .12);
+  position: relative;
+  z-index: 5;
+}
+#root .pa-topbar-title { letter-spacing: -0.015em; }
+#root .pa-topbar-subtitle { letter-spacing: 0.01em; }
+
+/* Sidebar: critically damped slide, same path in and out */
+#root .pa-sidebar {
+  transition:
+    transform var(--t-base) var(--ease-spring),
+    width var(--t-base) var(--ease-spring),
+    min-width var(--t-base) var(--ease-spring);
+}
+#root .pa-session-item {
+  border-radius: 12px;
+  transition: background-color var(--t-base) var(--ease-out), transform var(--t-fast) ease-out;
+}
+#root .pa-session-item:active { transform: scale(0.98); }
+#root .pa-new-chat-btn {
+  border-radius: 12px;
+  transition: background-color var(--t-base) var(--ease-out), transform var(--t-fast) ease-out;
+}
+#root .pa-new-chat-btn:active { transform: scale(0.97); }
+
+/* Welcome */
+#root .pa-welcome h4 {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+}
+#root .pa-welcome p { max-width: 34rem; line-height: 1.5; }
+#root .pa-prompt-chip {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  transition:
+    transform var(--t-fast) ease-out,
+    background-color var(--t-base) var(--ease-out),
+    border-color var(--t-base) var(--ease-out),
+    box-shadow var(--t-base) var(--ease-out);
+}
+#root .pa-prompt-chip:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--sh-2);
+}
+#root .pa-prompt-chip:active { transform: scale(0.97); }
+
+/* Messages: calmer entrance, clearer hierarchy */
+#root .pa-messages { gap: 10px; scroll-behavior: smooth; }
+#root .pa-msg-row { animation: apple-rise 320ms var(--ease-out) both; }
+#root .pa-msg-bubble { font-size: 15px; line-height: 1.55; letter-spacing: 0; }
+#root .pa-msg-bubble.bot {
+  border: 1px solid var(--line);
+  border-radius: 6px 20px 20px 20px;
+  box-shadow: var(--sh-1);
+}
+#root .pa-msg-bubble.user {
+  border-radius: 20px 6px 20px 20px;
+  box-shadow: 0 6px 18px -8px rgba(20, 40, 65, .5);
+}
+#root .pa-advisory { border-radius: 16px !important; }
+
+/* Input: a floating material pill instead of a bordered footer strip */
+#root .pa-input-area {
+  background: linear-gradient(to top, var(--bg-color) 55%, transparent);
+  border-top: 0;
+  padding: 12px 24px 20px;
+}
+#root .pa-input-row {
+  background: var(--material-bg);
+  -webkit-backdrop-filter: var(--material-blur);
+  backdrop-filter: var(--material-blur);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 8px 6px 22px;
+  box-shadow: 0 1px 2px rgba(20, 40, 65, .06), 0 12px 30px -14px rgba(20, 40, 65, .25);
+  transition: box-shadow var(--t-base) var(--ease-out), border-color var(--t-base) var(--ease-out);
+}
+#root .pa-input-row:focus-within {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ring) 25%, transparent), 0 12px 30px -14px rgba(20, 40, 65, .3);
+}
+
+/* ── Login / signup ────────────────────────────────────────────────────── */
+#root .auth-hero-title {
+  letter-spacing: -0.035em;
+  line-height: 1.04;
+}
+#root .auth-hero-lead { line-height: 1.5; letter-spacing: 0; }
+#root .auth-card { border-radius: 24px; }
+#root .auth-feature-card {
+  border-radius: 18px;
+  transition: transform var(--t-base) var(--ease-spring), box-shadow var(--t-base) var(--ease-out);
+}
+#root .auth-feature-card:hover { transform: translateY(-3px); box-shadow: var(--sh-2) !important; }
+#root .card.auth-category-card {
+  border-radius: 18px !important;
+  transition: transform var(--t-fast) ease-out, box-shadow var(--t-base) var(--ease-out);
+}
+#root .auth-category-card:hover { box-shadow: var(--sh-2); transform: translateY(-2px); }
+#root .auth-card label, #root .auth-card .form-label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+}
+#root .auth-card .btn { padding-block: 12px; }
+
+/* ── Lodge grievance form ──────────────────────────────────────────────── */
+#root .grm-ui .container.mt-5 .col-md-8 > .card { border-radius: 24px; padding: clamp(1.25rem, 4vw, 2.5rem) !important; }
+#root .grm-ui .container.mt-5 .col-md-8 h3 { font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -0.025em; }
+#root .grm-ui .container.mt-5 .col-md-8 form label,
+#root .grm-ui .container.mt-5 .col-md-8 .mb-3 > label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+#root .grm-ui .container.mt-5 .col-md-8 .form-control { padding: 12px 14px; font-size: 16px; }
+#root .grm-ui .container.mt-5 .col-md-8 button[type="submit"] {
+  padding-block: 14px !important;
+  font-size: 16px;
+  border-radius: 999px;
+}
+
+/* ── Home page ─────────────────────────────────────────────────────────── */
+#root .home-hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(56px, 9vw, 120px) 0 clamp(48px, 7vw, 96px);
+  border-bottom: 0;
+  background:
+    radial-gradient(1100px 520px at 18% -10%, color-mix(in srgb, var(--navy-light) 70%, transparent), transparent 70%),
+    radial-gradient(700px 420px at 100% 100%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%),
+    var(--navy);
+}
+#root .home-hero-title {
+  font-size: clamp(2.5rem, 6.4vw, 5rem);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  font-weight: 700;
+  text-wrap: balance;
+}
+#root .home-hero-lead {
+  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+  line-height: 1.5;
+  letter-spacing: -0.005em;
+  max-width: 40ch;
+}
+
+/* Staggered, calm entrance for the hero content */
+#root .home-hero .col-lg-7 > *, #root .home-hero .col-lg-5 > * {
+  animation: apple-rise 700ms var(--ease-out) both;
+}
+#root .home-hero .col-lg-7 > :nth-child(2) { animation-delay: 80ms; }
+#root .home-hero .col-lg-7 > :nth-child(3) { animation-delay: 160ms; }
+#root .home-hero .col-lg-7 > :nth-child(4) { animation-delay: 240ms; }
+#root .home-hero .col-lg-5 > * { animation-delay: 200ms; }
+
+/* Track card: a thick, light material floating on the navy */
+#root .home-hero .trk {
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  -webkit-backdrop-filter: var(--material-blur);
+  backdrop-filter: var(--material-blur);
+  border: 1px solid rgba(255, 255, 255, .35);
+  border-radius: 26px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .12), 0 40px 80px -24px rgba(0, 0, 0, .55);
+}
+#root .home-hero .trk h3 { letter-spacing: -0.02em; }
+#root .home-hero .trk .inp { border-radius: 14px; padding: 12px 14px; font-size: 16px; }
+
+#root .btn.home-lodge-btn, #root .btn.home-track-btn {
+  border-radius: 999px;
+  letter-spacing: -0.005em;
+}
+
+/* Sections breathe */
+#root .home-categories, #root .home-journey { padding: clamp(56px, 8vw, 104px) 0; }
+#root .home-about { padding: clamp(64px, 9vw, 120px) 0; }
+#root .home-page h2.fs-h2 { letter-spacing: -0.03em; line-height: 1.08; text-wrap: balance; }
+#root .home-section-lead, #root .home-page .muted.fs-md { line-height: 1.5; }
+
+/* Category tiles */
+#root .tile-card {
+  border-radius: 22px;
+  box-shadow: var(--sh-1);
+  transition:
+    transform var(--t-base) var(--ease-spring),
+    box-shadow var(--t-base) var(--ease-out);
+}
+#root .tile-card:hover { transform: translateY(-4px); box-shadow: var(--sh-2); }
+#root .tile-card:active { transform: scale(0.98); transition-duration: var(--t-fast); }
+#root .home-category-title { letter-spacing: -0.015em; }
+
+/* Journey: stops settle in rather than snap */
+#root .journey-stop::before {
+  transition:
+    background-color var(--t-base) var(--ease-out),
+    border-color var(--t-base) var(--ease-out),
+    box-shadow var(--t-base) var(--ease-out),
+    transform var(--t-base) var(--ease-spring);
+}
+#root .journey-stop.on::before { transform: scale(1.08); }
+#root .journey-line-fill { transition: width 600ms var(--ease-spring); }
+#root .journey-stop h4 { letter-spacing: -0.015em; }
+
+/* About */
+#root .home-about-text { line-height: 1.6; }
+#root .home-about-img { border-radius: 28px; border-width: 0; box-shadow: 0 2px 6px rgba(20, 40, 65, .08), 0 40px 80px -30px rgba(20, 40, 65, .4); }
+#root .home-stat-card {
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  -webkit-backdrop-filter: var(--material-blur);
+  backdrop-filter: var(--material-blur);
+  border: 1px solid var(--material-line);
+  border-left: 5px solid var(--accent);
+  border-radius: 18px;
+}
+#root .home-stat-value { letter-spacing: -0.03em; }
+
+/* ── User dashboard ────────────────────────────────────────────────────── */
+#root .grm-ui .container.mt-4 > .d-flex.border-bottom {
+  border-bottom-color: var(--line) !important;
+}
+#root .grm-ui .container.mt-4 h2 {
+  font-size: clamp(1.75rem, 3.4vw, 2.5rem);
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+}
+
+/* Stat tiles: big tabular figures, quiet labels, surface that works in both themes */
+#root .dash-stat-card.bg-light {
+  background: var(--surface) !important;
+  border-radius: 20px;
+  box-shadow: var(--sh-1) !important;
+  transition: transform var(--t-base) var(--ease-spring), box-shadow var(--t-base) var(--ease-out);
+}
+#root .dash-stat-card:hover { transform: translateY(-2px); box-shadow: var(--sh-2) !important; }
+#root .dash-stat-card p { letter-spacing: 0.04em; }
+#root .dash-stat-card h3 {
+  font-size: clamp(2rem, 3.6vw, 2.75rem);
+  letter-spacing: -0.035em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Table: airy rows, hairline separators, small-caps headers */
+#root .grm-ui .container.mt-4 .table { --bs-table-bg: transparent; border-collapse: separate; border-spacing: 0; }
+#root .grm-ui .container.mt-4 .table thead.table-light th {
+  background: transparent;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--line);
+  padding-block: 12px;
+}
+#root .grm-ui .container.mt-4 .table tbody td {
+  padding-block: 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+#root .grm-ui .container.mt-4 .table-hover > tbody > tr {
+  transition: background-color var(--t-base) var(--ease-out);
+}
+#root .grm-ui .container.mt-4 .table-hover > tbody > tr:hover > * {
+  --bs-table-hover-bg: color-mix(in srgb, var(--navy) 5%, transparent);
+}
+#root .grm-ui .container.mt-4 .table .badge { letter-spacing: 0.01em; font-weight: 600; box-shadow: none !important; }
+
+/* Quick actions: tappable rows with instant press feedback */
+#root .dashboard-action-card.bg-light {
+  background: var(--surface-2) !important;
+  border-radius: 16px !important;
+  box-shadow: none !important;
+  transition:
+    transform var(--t-fast) ease-out,
+    background-color var(--t-base) var(--ease-out),
+    box-shadow var(--t-base) var(--ease-out);
+}
+#root .dashboard-action-card:hover { box-shadow: var(--sh-2) !important; transform: translateY(-1px); }
+#root .dashboard-action-card:active { transform: scale(0.98); }
+#root .dashboard-action-card h6 { color: var(--text) !important; letter-spacing: -0.01em; }
+
+/* Feedback modal: dim and blur the page, material arrives from the centre */
+@keyframes apple-sheet {
+  from { opacity: 0; transform: scale(0.94) translateY(8px); filter: blur(6px); }
+  to   { opacity: 1; transform: none; filter: none; }
+}
+#root .modal.show.d-block {
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  animation: apple-fade 220ms ease-out both;
+}
+#root .modal.show .modal-content {
+  border-radius: 24px;
+  animation: apple-sheet 340ms var(--ease-spring) both;
+}
+@keyframes apple-fade { from { opacity: 0; } to { opacity: 1; } }
+#root .dash-rating-star { transition: transform var(--t-fast) ease-out; }
+#root .dash-rating-star:hover { transform: scale(1.12); }
+#root .dash-rating-star:active { transform: scale(0.92); }
+
+/* ── Track results ─────────────────────────────────────────────────────── */
+#root .track-page h2 { font-size: clamp(1.75rem, 3.4vw, 2.5rem); letter-spacing: -0.03em; line-height: 1.08; }
+#root .track-page .track-card { animation: apple-rise 460ms var(--ease-out) both; }
+#root .track-result-icon {
+  width: 72px;
+  height: 72px;
+  background: color-mix(in srgb, var(--navy) 8%, var(--surface));
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+#root .track-page .track-card h3 { letter-spacing: -0.025em; }
+#root .track-page .track-card .bg-light.rounded-3,
+#root .track-page .track-card .bg-light.rounded {
+  background: var(--surface-2) !important;
+  border: 0 !important;
+  border-radius: 18px !important;
+}
+#root .track-page .track-card .border.rounded-3 { border-radius: 16px !important; }
+#root .track-page .track-card .fs-12, #root .track-page .track-card .fs-13 { letter-spacing: 0.04em; }
+#root .track-page .track-card .fw-bold.text-dark { color: var(--text) !important; letter-spacing: -0.005em; }
+#root .track-page .track-card .badge { letter-spacing: 0.01em; font-weight: 600; }
+#root .track-page .btn.track-btn { border-radius: 999px; padding-block: 14px; }
+
+/* ── Profile ───────────────────────────────────────────────────────────── */
+#root .profile-page h2 { font-size: clamp(1.75rem, 3.4vw, 2.5rem); letter-spacing: -0.03em; }
+#root .profile-card { border-radius: 24px !important; box-shadow: var(--sh-1) !important; }
+#root .profile-banner {
+  height: 150px;
+  background:
+    radial-gradient(520px 220px at 12% 0%, color-mix(in srgb, var(--navy-light) 75%, transparent), transparent 70%),
+    radial-gradient(420px 220px at 100% 100%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 70%),
+    var(--navy) !important;
+}
+#root .profile-avatar {
+  box-shadow: 0 2px 6px rgba(20, 40, 65, .15), 0 14px 30px -10px rgba(20, 40, 65, .45) !important;
+}
+#root .profile-header-body h3 { letter-spacing: -0.025em; }
+#root .btn.profile-tab {
+  transition: color var(--t-base) var(--ease-out), border-color var(--t-base) var(--ease-out), transform var(--t-fast) ease-out;
+}
+#root .profile-page .form-label { font-size: 13px; letter-spacing: 0.01em; color: var(--muted) !important; }
+#root .profile-page .form-control, #root .profile-page .form-select { padding: 11px 14px; }
+
+/* ── Help ──────────────────────────────────────────────────────────────── */
+#root .help-card {
+  border-radius: 24px;
+  box-shadow: 0 1px 2px rgba(20, 40, 65, .06), 0 20px 50px -24px rgba(20, 40, 65, .25);
+}
+#root .help-card h3 { font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -0.025em; line-height: 1.1; }
+#root .helpline-box { border-radius: 18px; }
+#root .helpline-number { letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+
+/* ── Navbar: fewer, calmer items with consistent rhythm ───────────────── */
+#root .site-navbar .navbar-brand-logo { height: 40px; margin-right: 8px; }
+#root .site-navbar .brand-mark { font-size: 1.25rem; letter-spacing: -0.01em; font-family: var(--font-d); }
+#root .site-navbar .nav-links { gap: 28px; }
+#root .site-navbar .nav-links > * { margin-right: 0 !important; }
+#root .site-navbar .nav-utilities { gap: 12px; padding-left: 20px; border-left: 1px solid var(--line); }
+#root .site-navbar .nav-utilities > * { margin: 0 !important; }
+#root .site-navbar .nav-link-custom,
+#root .site-navbar .nav-assistant-link { font-size: 14.5px; font-weight: 500; letter-spacing: -0.005em; white-space: nowrap; }
+#root .site-navbar .nav-lang-select { width: auto; padding-block: 5px; font-size: 13.5px; border-radius: 999px; }
+#root .site-navbar .nav-greeting { font-size: 14.5px; white-space: nowrap; }
+#root .site-navbar .nav-profile-link { margin-right: 4px !important; }
+#root .site-navbar .nav-logout { border-radius: 999px; white-space: nowrap; }
+#root .site-navbar .btn-danger { white-space: nowrap; }
+
+/* Narrower laptops / split windows: shed the least useful items first */
+@media (max-width: 1280px) {
+  #root .site-navbar .nav-links { gap: 20px; }
+  #root .site-navbar .nav-greeting { display: none; }
+  #root .site-navbar .nav-utilities { padding-left: 14px; gap: 10px; }
+}
+@media (max-width: 1100px) {
+  #root .site-navbar .nav-links { gap: 14px; }
+  #root .site-navbar .brand-mark { display: none; }
+  #root .site-navbar .nav-live-dot { display: none; }
+}
+
+#root .lodge-project-chip {
+  background: color-mix(in srgb, var(--navy) 8%, var(--surface));
+  color: var(--navy);
+  border: 1px solid var(--line);
+}
+[data-theme="dark"] #root .lodge-project-chip { color: var(--text); }
+
+/* ── Spring motion ─────────────────────────────────────────────────────────
+ * linear() approximations of springs. "smooth" is critically damped (no
+ * overshoot, the default); "soft" settles with a small bounce and is used only
+ * where something physical was pressed, popped or released. */
+:root {
+  --spring-smooth: linear(0, 0.35 8%, 0.68 16%, 0.88 26%, 0.96 36%, 0.99 48%, 1);
+  --spring-soft: linear(0, 0.22 6%, 0.62 13%, 0.9 20%, 1.04 28%, 1.06 33%, 1.03 40%, 0.99 50%, 1.005 65%, 1);
+}
+
+/* Scroll reveal (classes added by utils/motion.js). Animation, not transition,
+ * so it never fights the hover transitions on the same elements. */
+@keyframes apple-reveal {
+  from { opacity: 0; transform: translateY(22px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+.reveal:not(.is-in) { opacity: 0; transform: translateY(22px) scale(0.985); }
+.reveal.is-in {
+  animation: apple-reveal 760ms var(--spring-smooth) var(--reveal-delay, 0ms) backwards;
+}
+
+/* Buttons: instant press, springy release */
+.grm-ui .btn, .grm-ui .auth-category-card, .grm-ui .cursor-pointer {
+  transition:
+    transform 480ms var(--spring-soft),
+    background-color var(--t-base) var(--ease-out),
+    box-shadow var(--t-base) var(--ease-out),
+    opacity var(--t-base) var(--ease-out);
+}
+.grm-ui .btn:active:not(:disabled), .grm-ui .auth-category-card:active, .grm-ui .cursor-pointer:active {
+  transition:
+    transform 90ms ease-out,
+    background-color var(--t-base) var(--ease-out),
+    box-shadow var(--t-base) var(--ease-out),
+    opacity var(--t-base) var(--ease-out);
+}
+
+/* Navbar: denser material and a hairline once content scrolls beneath it */
+.site-navbar { transition: background-color var(--t-base) var(--ease-out), box-shadow var(--t-base) var(--ease-out); }
+html[data-scrolled] .site-navbar {
+  background-color: color-mix(in srgb, var(--surface) 86%, transparent);
+  box-shadow: 0 1px 0 var(--line), 0 10px 30px -18px rgba(20, 40, 65, .35) !important;
+}
+
+/* Chat bubbles pop from the side they belong to */
+@keyframes apple-bubble-user { from { opacity: 0; transform: translateY(8px) scale(0.9); } to { opacity: 1; transform: none; } }
+@keyframes apple-bubble-bot  { from { opacity: 0; transform: translateY(8px) scale(0.94); } to { opacity: 1; transform: none; } }
+#root .pa-msg-row.user { animation: apple-bubble-user 520ms var(--spring-soft) both; transform-origin: right bottom; }
+#root .pa-msg-row.bot  { animation: apple-bubble-bot 480ms var(--spring-smooth) both; transform-origin: left bottom; }
+
+/* Track timeline: steps complete one after another */
+@keyframes apple-pop { from { transform: scale(0.4); opacity: 0.3; } to { transform: scale(1.04); opacity: 1; } }
+@keyframes apple-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+#root .track-page .track-step-dot.is-done { animation: apple-pop 620ms var(--spring-soft) both; }
+#root .track-page .track-step-line.is-done { transform-origin: left; animation: apple-fill 520ms var(--spring-smooth) both; }
+#root .track-page .text-center:nth-child(3) > .track-step-dot.is-done { animation-delay: 220ms; }
+#root .track-page .text-center:nth-child(5) > .track-step-dot.is-done { animation-delay: 440ms; }
+#root .track-page .text-center:nth-child(7) > .track-step-dot.is-done { animation-delay: 660ms; }
+#root .track-page .track-step-line.is-done:nth-child(2) { animation-delay: 80ms; }
+#root .track-page .track-step-line.is-done:nth-child(4) { animation-delay: 300ms; }
+#root .track-page .track-step-line.is-done:nth-child(6) { animation-delay: 520ms; }
+
+/* Route changes: the page content settles in while the navbar and footer stay put.
+ * Layout keys this wrapper by pathname, so every navigation replays it. */
+@keyframes apple-route {
+  from { opacity: 0; transform: translateY(14px) scale(0.992); }
+  to   { opacity: 1; transform: none; }
+}
+.grm-ui .page-transition { animation: apple-route 460ms var(--spring-smooth) backwards; }
+
+/* ── Accessibility: respond to the three user preferences ──────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  .grm-ui .btn:active:not(:disabled), .grm-ui .auth-category-card:active, .grm-ui .cursor-pointer:active,
+  .grm-ui .btn-primary:hover, .grm-ui .btn-accent:hover, .track-page .track-step-dot.is-done { transform: none; }
+  .chat-window { transform: none; filter: none; transition: opacity 200ms ease; }
+  #root .pa-prompt-chip:hover, #root .pa-prompt-chip:active, #root .pa-session-item:active,
+  #root .pa-new-chat-btn:active, #root .auth-feature-card:hover, #root .auth-category-card:hover { transform: none; }
+  #root .pa-sidebar { transition: none; }
+  #root .tile-card:hover, #root .tile-card:active, #root .journey-stop.on::before { transform: none; }
+  #root .dash-stat-card:hover, #root .dashboard-action-card:hover, #root .dashboard-action-card:active,
+  #root .dash-rating-star:hover, #root .dash-rating-star:active { transform: none; }
+  #root .modal.show .modal-content, #root .modal.show.d-block { animation: none; }
+  #root .track-page .track-card { animation: none; }
+  .reveal:not(.is-in), .reveal { opacity: 1 !important; transform: none !important; }
+  .reveal.is-in, #root .pa-msg-row.user, #root .pa-msg-row.bot,
+  #root .track-page .track-step-dot.is-done, #root .track-page .track-step-line.is-done,
+  .grm-ui .page-transition { animation: none !important; }
+  .grm-ui .btn, .grm-ui .auth-category-card, .grm-ui .cursor-pointer { transition-duration: 0.01ms; }
+  #root .home-hero .col-lg-7 > *, #root .home-hero .col-lg-5 > * { animation: none; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  #root .pa-topbar { background: var(--navy); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  #root .pa-input-row { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  #root .modal.show.d-block { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  #root .home-hero .trk, #root .home-stat-card { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .site-navbar {
+    background-color: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .site-navbar { background-color: var(--surface); border-bottom-color: var(--text); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .grm-ui .card { border: 1px solid var(--text) !important; }
+  .grm-ui .form-control, .grm-ui .form-select { border-color: var(--text); }
+}

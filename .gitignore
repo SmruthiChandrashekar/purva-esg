@@ -1,0 +1,92 @@
+# --- NODE / REACT ---
+node_modules/
+dist/
+build/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- PYTHON / BACKEND ---
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+ENV/
+env.bak/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- SENSITIVE FILES (DO NOT UPLOAD) ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+admin_password_sql.txt
+hash_output.txt
+
+# --- AI MODELS / LARGE FILES (>100MB) ---
+*.safetensors
+*.bin
+*.pth
+*.joblib
+*.onnx
+agents/**/model/
+
+# --- DATABASE / LOGS ---
+*.db
+*.sqlite3
+*.log
+
+# --- OS / IDEs ---
+.DS_Store
+.vscode/
+.idea/
+Thumbs.db
+*.swp
+*.swo
+# --- AI RESULTS / CHECKPOINTS ---
+**/results/
+**/checkpoint-*/
+*.pt
+*.bin
+*.pth
+
+# --- CLAUDE-GENERATED NOTES ---
+CHANGES_SUMMARY.md
+SECURITY_FIXES_LOG.md
+SECURITY_ISSUES.txt
+PERFORMANCE_ISSUES.txt
+
+# PWA dev build output
+frontend/dev-dist/
+PERFORMANCE_FIXES_LOG.md
+PROJECT_STATUS.md
+
+# Agent / Claude Code tooling
+.agents/
+.claude/
+
+# Status / log / audit notes (not source)
+*_STATUS.md
+*_LOG.md
+*_SUMMARY.md
+*_AUDIT.md
+rag/project_audit.md
+skills-lock.json
+claude_skills.md

@@ -1,0 +1,844 @@
+import React, { useState, useEffect, useRef, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../context/LanguageContext';
+import { apiClient } from "../services/api";
+import { useAuth } from "../context/AuthProvider";
+
+import "./Chatbot.css";
+import { SINGLE_DEPARTMENT_MODE } from "../config/features";
+/**
+ * Formats RAG text to convert asterisks to bullet points, 
+ * handles bolding, and nicely formats the "Sources:" section.
+ */
+const formatBotMessage = (text) => {
+  if (!text) return { __html: '' };
+  
+  let formatted = text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(?:\s|^)\*\s+(.*?)(?=(?:\s\*|$))/g, '<br/>• $1')
+    .replace(/(Sources?:)/gi, '<br/><br/><strong style="color: #6c757d; font-size: 0.9em;">$1</strong>')
+    .replace(/\n/g, '<br/>');
+
+  return { __html: formatted };
+};
+
+const Chatbot = () => {
+  const navigate = useNavigate();
+  const { langCode, t } = useLanguage();
+  const { user, userDetails } = useAuth();
+  
+  const [isOpen, setIsOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const getLodgeRoute = () => {
+    if (SINGLE_DEPARTMENT_MODE) return "/lodge-external";
+    if (!userDetails?.user_type) return "/lodge-selection";
+    switch (userDetails.user_type) {
+      case "Internal": return "/lodge-internal";
+      case "Contract": return "/lodge-contract";
+      case "External": return "/lodge-external";
+      default: return "/lodge-selection";
+    }
+  };
+
+  const stripEmojis = (str) => str ? str.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}]/gu, '').replace(/\s+/g, ' ').trim() : '';
+
+  const getQueryDescription = (msgItem) => {
+    if (msgItem?.original_query) return stripEmojis(msgItem.original_query);
+    const idx = messages.findIndex(m => m.id === msgItem?.id);
+    if (idx > 0) {
+      for (let i = idx - 1; i >= 0; i--) {
+        if (!messages[i].isBot && messages[i].text) {
+          return stripEmojis(messages[i].text);
+        }
+      }
+    }
+    return '';
+  };
+  
+  // Chat History States
+  const [sessionId, setSessionId] = useState(null);
+  const [sessions, setSessions] = useState([]);
+  const [messages, setMessages] = useState([
+    { id: 1, text: null, isBot: true, isGreeting: true }
+  ]);
+  
+  const [inputValue, setInputValue] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [recordSecs, setRecordSecs] = useState(0);
+  const [voiceError, setVoiceError] = useState('');
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  
+  const messagesEndRef = useRef(null);
+  
+  // MediaRecorder refs
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const timerRef = useRef(null);
+  const shouldSendRef = useRef(true);
+  const clearErrorRef = useRef(null);
+  const isSendingRef = useRef(false);
+
+  const isSpeechSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+
+  const fmtTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+  const stopTimer = () => {
+    clearInterval(timerRef.current);
+    timerRef.current = null;
+    setRecordSecs(0);
+  };
+
+  const startListening = async () => {
+    if (!isSpeechSupported || listening) return;
+
+    audioChunksRef.current = [];
+    shouldSendRef.current = true;
+    setVoiceError('');
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstart = () => {
+        setListening(true);
+        setRecordSecs(0);
+        timerRef.current = setInterval(() => setRecordSecs(s => s + 1), 1000);
+      };
+
+      mediaRecorder.onstop = async () => {
+        setListening(false);
+        stopTimer();
+        stream.getTracks().forEach(track => track.stop());
+
+        if (shouldSendRef.current && audioChunksRef.current.length > 0) {
+          setIsTranscribing(true);
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const formData = new FormData();
+          formData.append('file', audioBlob, 'recording.webm');
+          
+          try {
+            const response = await apiClient('/api/agents/transcribe', {
+              method: 'POST',
+              body: formData,
+            });
+            if (!response.ok) throw new Error('Transcription failed');
+            const data = await response.json();
+            const transcript = typeof data.transcript === 'string' 
+              ? data.transcript 
+              : (data.transcript?.text || '');
+              
+            if (transcript.trim()) {
+              handleSendMessage(transcript.trim());
+            }
+          } catch (error) {
+            console.error('Whisper transcription error:', error);
+            showError("Couldn't transcribe audio. Try again.");
+          } finally {
+            setIsTranscribing(false);
+          }
+        }
+      };
+
+      mediaRecorder.start();
+    } catch (err) {
+      console.error('Microphone access error:', err);
+      showError("Microphone access denied. Please allow mic in browser settings.");
+    }
+  };
+
+  const showError = (msg) => {
+    clearTimeout(clearErrorRef.current);
+    setVoiceError(msg);
+    clearErrorRef.current = setTimeout(() => setVoiceError(''), 4000);
+  };
+
+  const stopListening = () => {
+    shouldSendRef.current = true;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const cancelListening = () => {
+    shouldSendRef.current = false;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setListening(false);
+    stopTimer();
+  };
+
+  const [showHint, setShowHint] = useState(true);
+  const [hintText, setHintText] = useState(null);
+
+  const suggestedPrompts = [
+    "What is POSH policy?",
+    "Can I report anonymously?",
+    "What qualifies as harassment?",
+    "How to file a complaint?"
+  ];
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowHint(false), 6000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const hideHint = () => setShowHint(false);
+    document.addEventListener('click', hideHint);
+    return () => document.removeEventListener('click', hideHint);
+  }, []);
+
+  useEffect(() => {
+    const handleContextTrigger = (e) => {
+      setHintText(e.detail || "Not sure about policy? Ask the assistant first.");
+      setShowHint(true);
+      if (isOpen) setIsOpen(false);
+      setTimeout(() => setShowHint(false), 5000);
+    };
+    window.addEventListener('chatbot-hint', handleContextTrigger);
+    return () => window.removeEventListener('chatbot-hint', handleContextTrigger);
+  }, [isOpen]);
+
+  useEffect(() => {
+    const handleChatbotOpen = (e) => {
+      setIsOpen(true);
+      setShowHint(false);
+      apiClient("/api/agents/warmup").catch(err => console.error("Warmup failed", err));
+      if (e.detail) {
+        setTimeout(() => handleSendMessage(e.detail), 300);
+      }
+    };
+    window.addEventListener('chatbot-open', handleChatbotOpen);
+    return () => window.removeEventListener('chatbot-open', handleChatbotOpen);
+  }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isTyping]);
+
+
+  // ── CHAT HISTORY LOGIC ───────────────────────────────────────────────────
+  
+  // Load chat history when user is logged in.
+  // Always start on a fresh conversation; past chats stay available in the history panel.
+  useEffect(() => {
+    if (user) loadAllSessions();
+  }, [user]);
+
+  const loadAllSessions = async () => {
+    try {
+      const res = await apiClient("/api/chat/sessions");
+      if (res.ok) {
+        setSessions(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to load sessions", err);
+    }
+  };
+
+  const loadSessionMessages = async (id) => {
+    try {
+      const res = await apiClient(`/api/chat/session/${id}`);
+      if (res.ok) {
+        const msgs = await res.json();
+        if (msgs.length > 0) {
+          // Convert backend format to frontend format
+          const formatted = msgs.map(m => {
+            const meta = m.metadata || {};
+            return {
+              id: m.id,
+              text: m.message,
+              isBot: m.sender === 'assistant',
+              severity: meta.severity || '',
+              department: meta.department || '',
+              routed: meta.routed || false,
+              grievance_id: meta.grievance_id || '',
+              assigned_to: meta.assigned_to || '',
+              trigger_form: meta.trigger_form || false,
+              form_reason: meta.form_reason || '',
+              chatbot_resolved: meta.chatbot_resolved !== false,
+              can_escalate: meta.can_escalate || false,
+              source_type: meta.source_type || 'GENERAL_KNOWLEDGE',
+              policy_name: meta.policy_name || '',
+              intent: meta.intent || '',
+              original_query: meta.original_query || ''
+            };
+          });
+          setMessages(formatted);
+        } else {
+          setMessages([{ id: 1, text: null, isBot: true, isGreeting: true }]);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load messages", err);
+    }
+  };
+
+  const handleNewConversation = () => {
+    setSessionId(null);
+    setMessages([{ id: 1, text: null, isBot: true, isGreeting: true }]);
+    setIsSidebarOpen(false);
+  };
+
+  const switchSession = (id) => {
+    setSessionId(id);
+    loadSessionMessages(id);
+    setIsSidebarOpen(false);
+  };
+
+
+  // ── RAG-POWERED RESPONSE ──────────────────────────────────────────────────
+  const handleSendMessage = async (text) => {
+    const trimmed = (text || '').trim();
+    if (!trimmed || isSendingRef.current || isTyping) return;
+
+    // Immediately acquire lock and update UI synchronously
+    isSendingRef.current = true;
+    setInputValue("");
+    setIsTyping(true);
+
+    let currentSessionId = sessionId;
+
+    // Create session if it doesn't exist
+    if (!currentSessionId) {
+      try {
+        const sessRes = await apiClient("/api/chat/session", { 
+          method: "POST", 
+          body: JSON.stringify({}) 
+        });
+        if (sessRes.ok) {
+          const newSession = await sessRes.json();
+          currentSessionId = newSession.id;
+          setSessionId(currentSessionId);
+          // Refresh sessions list in background
+          loadAllSessions();
+        }
+      } catch (err) {
+        console.error("Failed to create session", err);
+      }
+    }
+
+    const newUserMsg = { id: Date.now(), text: trimmed, isBot: false };
+    setMessages(prev => [...prev, newUserMsg]);
+
+    // Save user message to backend
+    if (currentSessionId) {
+      apiClient("/api/chat/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: currentSessionId, sender: "user", message: trimmed })
+      }).then(() => loadAllSessions()); // Update title in sidebar
+    }
+
+    // Call backend RAG endpoint
+    try {
+      const res = await apiClient("/api/agents/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: trimmed, lang: langCode, session_id: currentSessionId || undefined }),
+      });
+
+      if (!res.ok) throw new Error("Backend error");
+
+      const data = await res.json();
+      let responseText = data.response || "Sorry, I couldn't find an answer.";
+
+      // Append source citations if available
+      if (data.sources && data.sources.length > 0) {
+        const sourceList = data.sources
+          .map(s => `${s.source} (p.${s.page})`)
+          .join(", ");
+        responseText += `\n\n${t("sources") || "Sources"}: ${sourceList}`;
+      }
+
+      const botMsg = {
+        id: Date.now() + 1,
+        text: responseText,
+        isBot: true,
+        severity: data.severity ? data.severity.toLowerCase() : '',
+        department: data.department || '',
+        routed: data.routed || false,
+        grievance_id: data.grievance_id || '',
+        trigger_form: data.trigger_form || false,
+        form_reason: data.form_reason || '',
+        chatbot_resolved: data.chatbot_resolved !== false,
+        can_escalate: data.can_escalate || false,
+        source_type: data.source_type || 'GENERAL_KNOWLEDGE',
+        policy_name: data.policy_name || '',
+        intent: data.intent || 'QUERY',
+        original_query: trimmed
+      };
+
+      setMessages(prev => [...prev, botMsg]);
+
+      // Save bot message to backend with metadata so options persist after refresh/reopen
+      if (currentSessionId) {
+        apiClient("/api/chat/message", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: currentSessionId,
+            sender: "assistant",
+            message: responseText,
+            metadata: {
+              severity: botMsg.severity,
+              department: botMsg.department,
+              routed: botMsg.routed,
+              grievance_id: botMsg.grievance_id,
+              trigger_form: botMsg.trigger_form,
+              form_reason: botMsg.form_reason,
+              chatbot_resolved: botMsg.chatbot_resolved,
+              can_escalate: botMsg.can_escalate,
+              source_type: botMsg.source_type,
+              policy_name: botMsg.policy_name,
+              intent: botMsg.intent,
+              original_query: botMsg.original_query
+            }
+          })
+        });
+      }
+
+    } catch (err) {
+      console.error("RAG chat error:", err);
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        text: "Sorry, I'm having trouble connecting to the policy engine. Please try again in a moment.",
+        isBot: true
+      }]);
+    } finally {
+      setIsTyping(false);
+      isSendingRef.current = false;
+    }
+  };
+
+  // ── CHATBOT → HUMAN HANDOFF ──────────────────────────────────────────────
+  const [handoffLoading, setHandoffLoading] = useState(false);
+  const [handoffResult, setHandoffResult] = useState(null);
+
+  const handleHandoff = async () => {
+    if (handoffLoading) return;
+    setHandoffLoading(true);
+
+    // Collect last few messages as context
+    const recentMessages = messages
+      .filter(m => !m.isGreeting && m.text)
+      .slice(-5)
+      .map(m => m.text)
+      .join(' | ');
+    const description = recentMessages || 'User requested human assistance from chatbot';
+
+    try {
+      const res = await apiClient('/api/grievances/chatbot-handoff', {
+        method: 'POST',
+        body: JSON.stringify({
+          description: description.substring(0, 1000),
+          department: 'ESG',
+          session_id: sessionId,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setHandoffResult(data);
+        const confirmMsg = {
+          id: Date.now(),
+          text: `**Your request has been forwarded to the support team.**\n\n**Tracking ID**: ${data.grievance_id}\n**Assigned to**: ${data.assigned_to || 'Available representative'}\n**Tier**: ${data.assigned_tier}\n**Response SLA**: ${data.sla_hours} hours\n\nYou'll receive a notification when a representative responds.`,
+          isBot: true,
+        };
+        setMessages(prev => [...prev, confirmMsg]);
+      } else {
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          text: 'Sorry, I was unable to connect you to a human representative right now. Please try again or submit a formal grievance.',
+          isBot: true,
+        }]);
+      }
+    } catch (err) {
+      console.error('Handoff error:', err);
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        text: 'Connection error. Please try again.',
+        isBot: true,
+      }]);
+    } finally {
+      setHandoffLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (!isTyping && !isSendingRef.current) {
+        handleSendMessage(inputValue);
+      }
+    }
+  };
+
+  const handlePromptClick = (prompt) => {
+    handleSendMessage(prompt);
+  };
+
+  return (
+    <>
+
+      {/* TOOLTIP HINT */}
+      <div 
+        className={`bg-dark text-white shadow p-2 rounded-3 text-center position-fixed fs-13 pe-none chat-hint${showHint && !isOpen ? " is-visible" : ""}`}
+      >
+        {hintText || t('chatbotHint')}
+        <div className="position-absolute chat-hint-arrow" />
+      </div>
+
+      {/* FLOATING BUTTON (PILL) */}
+      <button 
+        onClick={(e) => {
+          e.stopPropagation();
+          const nextState = !isOpen;
+          setIsOpen(nextState);
+          setShowHint(false);
+          if (nextState) apiClient("/api/agents/warmup").catch(err => console.error("Warmup failed", err));
+        }}
+        className={`btn shadow-lg d-flex align-items-center chatbot-btn ${isOpen ? 'btn-open' : ''} position-fixed`}
+      >
+        {isOpen ? (
+          <svg width="24" height="24" fill="currentColor" viewBox="0 0 16 16" className="me-0">
+            <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+          </svg>
+        ) : (
+          <>
+            <img className="rounded-circle me-2 object-fit-contain chat-logo" src="/purva-logo.svg" alt="Purva" />
+            <span className="chatbot-text fw-bold">{t('chatbotBtn') || "Chat with Purva"}</span>
+          </>
+        )}
+      </button>
+
+      {/* CHAT PANEL */}
+      <div 
+        className={`card shadow-lg border-0 position-fixed rounded-4 overflow-hidden chat-window${isOpen ? " is-open" : ""}`}
+      >
+        {/* SIDEBAR (History) */}
+        <div className={`chat-sidebar d-flex flex-column ${isSidebarOpen ? 'open' : ''}`}>
+          <div className="p-3 border-bottom d-flex justify-content-between align-items-center bg-light">
+            <h6 className="mb-0 fw-bold">Chat History</h6>
+            <button className="btn btn-sm text-muted p-0" onClick={() => setIsSidebarOpen(false)}>
+              <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+            </button>
+          </div>
+          <div className="p-2 border-bottom">
+            <button 
+              className="btn w-100 fw-bold rounded-pill shadow-sm text-white border-0 chat-new-btn" 
+              onClick={handleNewConversation}
+            >
+              + New Conversation
+            </button>
+          </div>
+          <div className="flex-grow-1 overflow-auto bg-white">
+            {sessions.length === 0 ? (
+              <div className="text-center p-4 text-muted small">No past conversations</div>
+            ) : (
+              sessions.map(s => (
+                <div 
+                  key={s.id} 
+                  className={`session-item ${s.id === sessionId ? 'active' : ''}`}
+                  onClick={() => switchSession(s.id)}
+                >
+                  <div className="text-truncate fw-bold mb-1 fs-14 text-theme">
+                    {s.title || "New Conversation"}
+                  </div>
+                  <div className="text-muted fs-11">
+                    {new Date(s.updated_at).toLocaleDateString()}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* MAIN CHAT AREA */}
+        <div className={`chat-main d-flex flex-column w-100 h-100 ${isSidebarOpen ? 'shifted' : ''}`}>
+          {/* HEADER */}
+          <div className="text-white p-3 d-flex justify-content-between align-items-center flex-shrink-0 chat-header">
+            <div className="d-flex align-items-center gap-2">
+              <button 
+                className="btn btn-sm text-white p-0 border-0 shadow-none d-flex align-items-center justify-content-center me-1 chat-header-btn"
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              >
+                <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path fillRule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/></svg>
+              </button>
+              <div>
+                <h6 className="mb-0 fw-bold d-flex align-items-center gap-2">
+                  <img className="rounded-circle object-fit-contain chat-header-logo" src="/purva-logo.svg" alt="Purva" />
+                  {t('chatbotTitle') || "Purva Policy Assistant"}
+                </h6>
+                <small className="chat-header-subtitle">{t('chatbotSubtitle') || "Ask me anything"}</small>
+              </div>
+            </div>
+            <button onClick={() => setIsOpen(false)} className="btn btn-sm text-white p-0 lh-1 chat-close-btn">×</button>
+          </div>
+
+          {/* OVERLAY FOR SIDEBAR (closes sidebar on click) */}
+          {isSidebarOpen && (
+            <div
+              className="position-absolute chat-sidebar-scrim"
+              onClick={() => setIsSidebarOpen(false)}
+            />
+          )}
+
+          {/* MESSAGES BODY */}
+          <div className="flex-grow-1 p-3 overflow-y-auto">
+            
+            {messages.length === 1 && (
+              <div className="mb-4">
+                <p className="small mb-2 text-center chat-topics-label">{t('chatbotSuggestedTopics') || "Suggested Topics:"}</p>
+                <div className="d-flex flex-wrap gap-2 justify-content-center">
+                  {suggestedPrompts.map((prompt, idx) => (
+                    <button 
+                      key={idx} onClick={() => handlePromptClick(prompt)}
+                      className="btn btn-sm rounded-pill fs-13 text-theme chat-topic-btn"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {messages.map((msg) => (
+              <div key={msg.id} className={`d-flex mb-3 ${msg.isBot ? 'justify-content-start align-items-start gap-2' : 'justify-content-end'}`}>
+                {msg.isBot && (
+                  <img className="rounded-circle mt-1 flex-shrink-0 object-fit-contain chat-logo" src="/purva-logo.svg" alt="Purva" />
+                )}
+                <div 
+                  className={`p-3 shadow-sm chat-bubble ${msg.isBot ? "is-bot" : "is-user"}`}
+                >
+                  {msg.isGreeting ? (
+                    t('chatbotGreeting') || "Hi! I'm the Policy Assistant. How can I help you today?"
+                  ) : msg.isBot ? (
+                    <>
+                      <div dangerouslySetInnerHTML={formatBotMessage(msg.text)} />
+
+                      {/* TRIGGER GRIEVANCE FORM CARD FOR HIGH / MEDIUM COMPLAINTS */}
+                      {msg.trigger_form && (msg.severity === 'high' || msg.severity === 'medium' || msg.form_reason === 'high_severity' || msg.form_reason === 'medium_severity') && (
+                        <div 
+                          className="mt-3 p-3 rounded-3 text-start shadow-sm chat-advisory is-complaint"
+                        >
+                          <div className="d-flex align-items-center justify-content-between mb-2">
+                            <span 
+                              className={`badge rounded-pill px-2 py-1 text-uppercase fw-bold text-white fs-10 chat-severity-badge${msg.severity === "high" ? " is-high" : ""}`}
+                            >
+                              {msg.severity ? `${msg.severity} Severity Complaint` : 'Formal Complaint'}
+                            </span>
+                            {msg.department && !SINGLE_DEPARTMENT_MODE && (
+<span className="small text-muted fw-semibold">
+Dept: {msg.department}
+</span>
+)}
+                          </div>
+                          <p className="small mb-3 fw-semibold text-dark">
+                            Formal grievance lodging is required for prioritized administrative investigation and SLA tracking.
+                          </p>
+                          <button
+                            type="button"
+                            className="btn btn-sm w-100 fw-bold shadow-sm rounded-pill d-flex align-items-center justify-content-center gap-2 bg-navy text-white border-0 fs-13 chat-escalate-btn"
+                            onClick={() => {
+                              setIsOpen(false);
+                              navigate(getLodgeRoute(), {
+                                state: {
+                                  description: getQueryDescription(msg),
+                                  department: msg.department || '',
+                                  source: 'CHATBOT_ESCALATION',
+                                  severity: msg.severity || 'MEDIUM'
+                                }
+                              });
+                            }}
+                          >
+                            <span>Open Grievance Form</span>
+                            <span>→</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* SATISFACTION / ESCALATION CARD FOR LOW SEVERITY GRIEVANCES */}
+                      {msg.can_escalate && (
+                        <div 
+                          className="mt-3 p-3 rounded-3 text-start shadow-sm chat-advisory is-guidance"
+                        >
+                          <div className="d-flex align-items-center gap-1 mb-1">
+                            <span className="badge rounded-pill px-2 py-1 fw-bold chat-guidance-badge">
+                              Resolution Guidance
+                            </span>
+                          </div>
+                          <p className="small mb-3 text-muted fs-12">
+                            Did this address your concern? If this explanation does not resolve the issue, you may lodge an official grievance ticket for formal department handling.
+                          </p>
+                          <button
+                            type="button"
+                            className="btn btn-outline-dark btn-sm w-100 fw-semibold rounded-pill d-flex align-items-center justify-content-center gap-2 fs-12 chat-followup-btn"
+                            onClick={() => {
+                              setIsOpen(false);
+                              navigate(getLodgeRoute(), {
+                                state: {
+                                  description: getQueryDescription(msg),
+                                  department: msg.department || '',
+                                  source: 'CHATBOT_ESCALATION',
+                                  severity: 'LOW'
+                                }
+                              });
+                            }}
+                          >
+                            <span>Not satisfied? Lodge Formal Grievance</span>
+                            <span>→</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* REDIRECT TO FORM FOR UNRESOLVED LOW COMPLAINTS */}
+                      {!msg.can_escalate && msg.trigger_form && (msg.form_reason === 'unresolved_low_query' || (!msg.chatbot_resolved && msg.severity === 'low')) && (
+                        <div 
+                          className="mt-3 p-3 rounded-3 text-start shadow-sm chat-advisory is-unresolved"
+                        >
+                          <div className="d-flex align-items-center gap-1 mb-2">
+                            <span className="badge bg-secondary-subtle text-dark rounded-pill px-2 py-1 fs-10 fw-semibold">
+                              Policy Unresolved
+                            </span>
+                          </div>
+                          <p className="small mb-3 text-muted">
+                            The automated assistant could not resolve this from official policy documents. Would you like to submit an official ticket?
+                          </p>
+                          <button
+                            type="button"
+                            className="btn btn-outline-dark btn-sm w-100 fw-semibold rounded-pill d-flex align-items-center justify-content-center gap-2 chat-followup-btn-compact"
+                            onClick={() => {
+                              setIsOpen(false);
+                              navigate(getLodgeRoute(), {
+                                state: {
+                                  description: getQueryDescription(msg),
+                                  department: msg.department || '',
+                                  source: 'CHATBOT_ESCALATION',
+                                  severity: 'LOW'
+                                }
+                              });
+                            }}
+                          >
+                            <span>Lodge as Formal Grievance</span>
+                            <span>→</span>
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    msg.text
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {isTyping && (
+              <div className="d-flex mb-3 justify-content-start">
+                <div className="p-3 shadow-sm d-flex align-items-center gap-1 chat-typing">
+                  <div className="spinner-grow spinner-grow-sm text-muted chat-typing-dot"></div>
+                  <div className="spinner-grow spinner-grow-sm text-muted chat-typing-dot-2"></div>
+                  <div className="spinner-grow spinner-grow-sm text-muted chat-typing-dot-3"></div>
+                </div>
+              </div>
+            )}
+            
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* HANDOFF BUTTON */}
+          {messages.length > 2 && !handoffResult && (
+            <div className="text-center py-2 border-top chat-footer-bar">
+              <button
+                onClick={handleHandoff}
+                disabled={handoffLoading}
+                className="btn btn-sm btn-outline-warning rounded-pill px-3 fw-semibold fs-12 chat-handoff-btn"
+              >
+                {handoffLoading ? (
+                  <><span className="spinner-border spinner-border-sm me-1" role="status" /> Connecting...</>
+                ) : (
+                  <>Speak to a Human</>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* INPUT BOX */}
+          <div className="border-top flex-shrink-0 chat-footer-bar">
+
+            {listening && (
+              <div className="rec-bar d-flex align-items-center gap-2 px-3">
+                <button className="border-0 cursor-pointer flex-shrink-0 rounded-circle d-flex align-items-center justify-content-center rec-discard-btn" onClick={cancelListening} title="Discard recording">
+                  <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                    <path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                  </svg>
+                </button>
+                <div className="position-relative flex-shrink-0 rec-mic">
+                  <div className="mic-ripple" /><div className="mic-ripple mic-ripple-2" />
+                  <div className="mic-core d-flex align-items-center justify-content-center rounded-circle position-relative">
+                    <svg width="15" height="15" fill="white" viewBox="0 0 16 16"><path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5z"/><path d="M10 8a2 2 0 1 1-4 0V3a2 2 0 1 1 4 0v5zM8 0a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V3a3 3 0 0 0-3-3z"/></svg>
+                  </div>
+                </div>
+                <div className="d-flex align-items-center gap-1 overflow-hidden rec-wave">
+                  {[0.3, 0.6, 1, 0.7, 0.45, 0.8, 0.5, 1, 0.65, 0.35].map((delay, i) => (
+                    <div key={i} className="sound-bar" style={{ height: `${14 + i % 3 * 8}px`, animationDelay: `${delay * 0.4}s` }} />
+                  ))}
+                  <span className="ms-2 fw-semibold fs-13 flex-shrink-0 rec-timer">
+                    {fmtTime(recordSecs)}
+                  </span>
+                </div>
+                <button onClick={stopListening} title="Stop and send" className="btn rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 border-0 text-white rec-send-btn">
+                  <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576zm6.787-8.201L1.591 6.602l4.339 2.76 7.494-7.493Z"/></svg>
+                </button>
+              </div>
+            )}
+
+            {!listening && (
+              <div className="p-3 chat-input-bar">
+                <div className="input-group">
+                  <input
+                    type="text"
+                    className="form-control rounded-pill me-2 border-0 shadow-none px-4 chat-input"
+                    placeholder={isTranscribing ? "Transcribing audio..." : (t('chatbotPlaceholder') || "Type a message...")}
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    disabled={isTyping || isTranscribing}
+                  />
+                  <button type="button" className="btn btn-outline-secondary rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0 chat-mic-btn" onClick={startListening} disabled={!isSpeechSupported || isTyping || isTranscribing}>
+                    <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5z"/><path d="M10 8a2 2 0 1 1-4 0V3a2 2 0 1 1 4 0v5zM8 0a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V3a3 3 0 0 0-3-3z"/></svg>
+                  </button>
+                  <button 
+                    className="btn rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 text-white border-0 chat-send-btn" 
+                    onClick={() => handleSendMessage(inputValue)} 
+                    disabled={!inputValue.trim() || isTyping || isTranscribing}
+                  >
+                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576zm6.787-8.201L1.591 6.602l4.339 2.76 7.494-7.493Z"/></svg>
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {voiceError && (
+              <div className="d-flex align-items-center gap-2 chat-voice-error">
+                {voiceError}
+                <button className="border-0 cursor-pointer p-0 chat-voice-error-close" onClick={() => setVoiceError('')}>×</button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default Chatbot;

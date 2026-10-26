@@ -1,0 +1,196 @@
+import React, { useState, useEffect, useContext } from "react";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend
+} from "recharts";
+import { apiClient } from "../services/api";
+import { ThemeContext } from "../context/ThemeContext";
+import "./AdminAnalytics.css";
+
+const AdminAnalytics = ({ adminDepartment, onFilter }) => {
+  const { theme } = useContext(ThemeContext);
+  const isDark = theme === "dark";
+
+  const [trends, setTrends] = useState([]);
+  const [metrics, setMetrics] = useState({ avg_resolution_time: 0 });
+  const [insights, setInsights] = useState({ top_categories: [], high_severity: 0, status_distribution: {} });
+  
+  // Filters
+  const [severity, setSeverity] = useState("");
+  const [filteredCount, setFilteredCount] = useState(0);
+
+  // Fetch Dashboard Data
+  const fetchDashboardData = async () => {
+    try {
+      const params = `?category=${adminDepartment}&severity=${severity}`;
+      const [trendsRes, metricsRes, insightsRes, complaintsRes] = await Promise.all([
+        apiClient(`/api/admin/trends${params}`),
+        apiClient(`/api/admin/metrics${params}`),
+        apiClient(`/api/admin/insights${params}`),
+        apiClient(`/api/admin/complaints${params}`)
+      ]);
+
+      setTrends(await trendsRes.json());
+      setMetrics(await metricsRes.json());
+      setInsights(await insightsRes.json());
+      
+      const complaints = await complaintsRes.json();
+      setFilteredCount(complaints.length);
+
+    } catch (err) {
+      console.error("Failed to fetch analytics", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [adminDepartment, severity]);
+
+  const COLORS = isDark
+    ? ["#e4e4e7", "#fbbf24", "#34d399", "#f87171"]
+    : ["#0c7cd5", "#f59e0b", "#2e7d32", "#c62828"];
+
+  const statusDistribution = insights?.status_distribution || {};
+  const STATUS_FILTER_MAP = { open: "Open", investigating: "Investigating", resolved: "Resolved", closed: "Closed", rejected: "Closed" };
+  const clickable = onFilter ? { role: "button", style: { cursor: "pointer" } } : {};
+  const statusData = Object.keys(statusDistribution).map(key => ({
+    name: key.charAt(0).toUpperCase() + key.slice(1),
+    value: statusDistribution[key]
+  }));
+
+  return (
+    <div className="mb-5">
+      {/* Filters */}
+      <div className="card shadow-sm border-0 mb-4 p-3 analytics-filter-card">
+        <div className="row g-3 align-items-center">
+          <div className="col-auto">
+            <span className="fw-bold text-heading">
+              <h5 className="mb-0 ms-2">
+                <i className="bi bi-graph-up me-2 analytics-title-icon"></i>
+                {adminDepartment ? `${adminDepartment} Analytics` : 'Overall Analytics'}
+              </h5>
+            </span>
+          </div>
+          <div className="col-md-3">
+            <select className="form-select form-select-sm" value={severity} onChange={e => setSeverity(e.target.value)}>
+              <option value="">All Severities</option>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Critical">Critical</option>
+            </select>
+          </div>
+          <div className="col-md-6 text-end text-muted analytics-count">
+            Showing {filteredCount} records for {adminDepartment}
+          </div>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="row g-3 mb-4 row-cols-2 row-cols-md-3 row-cols-xl-5">
+        {[
+          { cls: "is-total", label: "Total Grievances", value: filteredCount, sub: "all records in scope", onClick: () => onFilter?.({ status: "ALL", severity: "ALL", category: "ALL", date: "ALL", sla: "ALL" }), title: "Show all grievances" },
+          { cls: "is-resolution", label: "Avg Resolution Time", value: `${metrics.avg_resolution_time} hrs`, sub: "resolved tickets" },
+          { cls: "is-satisfaction", label: "User Satisfaction", value: metrics.avg_satisfaction ? `${metrics.avg_satisfaction} / 5` : "N/A", sub: "average feedback rating" },
+          { cls: "is-risk", label: "High/Critical Risk", value: insights.high_severity, sub: "needs priority attention", onClick: () => onFilter?.({ severity: "HIGH_CRITICAL" }), title: "Show High and Critical grievances" },
+          { cls: "is-pending", label: "Pending Cases", value: (insights?.status_distribution?.open || 0) + (insights?.status_distribution?.investigating || 0), sub: "open + in progress", onClick: () => onFilter?.({ status: "PENDING" }), title: "Show pending and in-progress grievances" },
+        ].map((k) => (
+          <div className="col" key={k.label}>
+            <div
+              className={`card shadow-sm border-0 p-3 h-100 analytics-stat ${k.cls}`}
+              role={k.onClick && onFilter ? "button" : undefined}
+              style={{ cursor: k.onClick && onFilter ? "pointer" : "default" }}
+              onClick={k.onClick}
+              title={k.title}
+            >
+              <div className="text-muted text-uppercase fw-semibold analytics-stat-label">{k.label}</div>
+              <div className="fw-bold analytics-stat-value">{k.value}</div>
+              <div className="text-muted analytics-stat-sub">{k.sub}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Charts Row */}
+      <div className="row g-3">
+        <div className="col-md-8">
+          <div className="card shadow-sm border-0 p-4 h-100">
+            <h6 className="fw-bold mb-1">Complaint Volume Trends</h6>
+            {onFilter && <small className="text-muted mb-3 d-block">Click a point to see that day's grievances</small>}
+            <div className="w-100 analytics-chart-lg">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={trends}
+                  style={onFilter ? { cursor: "pointer" } : undefined}
+                  onClick={(state) => {
+                    const date = state?.activeLabel;
+                    if (date && onFilter) onFilter({ date });
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "rgba(255,255,255,0.06)" : "#e2e8f0"} />
+                  <XAxis dataKey="date" tick={{ fontSize: 12, fill: isDark ? "#a1a1aa" : "#64748b" }} stroke={isDark ? "rgba(255,255,255,0.12)" : "#cbd5e1"} />
+                  <YAxis tick={{ fontSize: 12, fill: isDark ? "#a1a1aa" : "#64748b" }} stroke={isDark ? "rgba(255,255,255,0.12)" : "#cbd5e1"} allowDecimals={false} />
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: isDark ? "#121215" : "#ffffff",
+                      borderColor: isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0",
+                      color: isDark ? "#fafafa" : "#0f172a",
+                      borderRadius: "8px",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.35)"
+                    }}
+                    itemStyle={{ color: isDark ? "#fafafa" : "#0f172a" }}
+                  />
+                  <Line type="monotone" dataKey="count" stroke={isDark ? "#e4e4e7" : "#001a4d"} strokeWidth={3} dot={{ r: 4, fill: isDark ? "#fafafa" : "#001a4d" }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+        <div className="col-md-4">
+          <div className="card shadow-sm border-0 p-4 h-100">
+            <h6 className="fw-bold mb-1">Status Distribution</h6>
+            {onFilter && <small className="text-muted mb-3 d-block">Click a slice to filter the table</small>}
+            <div className="w-100 analytics-chart-sm">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                    onClick={(entry) => {
+                      const status = STATUS_FILTER_MAP[String(entry?.name || "").toLowerCase()];
+                      if (status && onFilter) onFilter({ status });
+                    }}
+                    style={onFilter ? { cursor: "pointer" } : undefined}
+                  >
+                    {statusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: isDark ? "#121215" : "#ffffff",
+                      borderColor: isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0",
+                      color: isDark ? "#fafafa" : "#0f172a",
+                      borderRadius: "8px",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.35)"
+                    }}
+                    itemStyle={{ color: isDark ? "#fafafa" : "#0f172a" }}
+                  />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: "12px", color: isDark ? "#a1a1aa" : "#64748b" }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+  );
+};
+
+export default AdminAnalytics;
