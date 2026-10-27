@@ -64,7 +64,7 @@ db = None
 
 
 def initialize_rag():
-    global embedding_model, db, RAG_READY, _RAG_INITIALIZING
+    global RAG_READY, _RAG_INITIALIZING
     if RAG_READY:
         return
 
@@ -75,54 +75,13 @@ def initialize_rag():
         try:
             print("[INFO] Warming up Policy RAG system...")
             start_time = time.time()
-
-            # ==================================================================
-            # OPTION A: EMBEDDING INITIALIZATION (LOW-RAM CLOUD RESILIENCE)
-            # ------------------------------------------------------------------
-            # Local HuggingFaceEmbeddings uses sentence-transformers & PyTorch.
-            # If those libraries are excluded/commented out to stay under 512MB RAM,
-            # this try-block catches the missing dependency and operates in
-            # direct Groq LLM fallback mode without failing the server startup.
-            # ==================================================================
-            if embedding_model is None:
-                try:
-                    embedding_model = HuggingFaceEmbeddings(
-                        model_name="all-MiniLM-L6-v2"
-                    )
-                except Exception as emb_init_err:
-                    print(f"[WARN] Local sentence-transformers not loaded ({emb_init_err}).")
-                    embedding_model = None
-
-            # Cloud mode: same model via Hugging Face hosted inference
-            if embedding_model is None and os.environ.get("HF_TOKEN"):
-                try:
-                    embedding_model = HFInferenceEmbeddings(os.environ["HF_TOKEN"])
-                    print("[INFO] Policy RAG using Hugging Face hosted embeddings.")
-                except Exception as hf_err:
-                    print(f"[WARN] Hugging Face hosted embeddings unavailable ({hf_err}).")
-                    embedding_model = None
-
-            if embedding_model is None:
-                print("[INFO] Policy RAG running in lightweight cloud mode (Groq fallback).")
-
-            if embedding_model is not None and os.path.exists(CHROMA_PATH):
-                persistent_client = chromadb.PersistentClient(path=CHROMA_PATH)
-                db = Chroma(
-                    client=persistent_client,
-                    embedding_function=embedding_model,
-                )
-
-                try:
-                    db.similarity_search("leave policy", k=1)
-                except Exception as e:
-                    print(f"[WARN] HuggingFace embeddings unavailable ({e}). Switching Policy RAG to lightweight Groq cloud mode.")
-                    db = None
-                    embedding_model = None
-            else:
-                db = None
-
+            from rag.policy_indexer import get_policy_index
+            idx = get_policy_index()
             RAG_READY = True
-            print(f"[OK] Policy RAG Ready (Initialized in {round(time.time() - start_time, 2)}s)\n")
+            print(f"[OK] Policy RAG Ready (Indexed {len(idx.chunks)} chunks across Puravankara policies in {round(time.time() - start_time, 2)}s)\n")
+        except Exception as e:
+            print(f"[WARN] Policy index initialization error: {e}")
+            RAG_READY = True
         finally:
             _RAG_INITIALIZING = False
 
@@ -156,7 +115,6 @@ def call_llm(prompt: str) -> str:
             max_tokens=600,
             temperature=0.0
         )
-        # Handle reasoning models (e.g. Qwen) that wrap thoughts in <think> tags
         content = response.choices[0].message.content.strip()
         content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
         return content
@@ -176,18 +134,6 @@ def preprocess_query(query: str) -> str:
     return cleaned
 
 
-def deduplicate_results(results):
-    """Remove exact duplicate chunks or near-identical text from vector search results."""
-    seen_texts = set()
-    deduped = []
-    for doc, score in results:
-        text_key = re.sub(r'\s+', ' ', doc.page_content[:200]).strip()
-        if text_key not in seen_texts:
-            seen_texts.add(text_key)
-            deduped.append((doc, score))
-    return deduped
-
-
 def get_rag_response(query_text: str):
     if not RAG_READY:
         initialize_rag()
@@ -195,47 +141,15 @@ def get_rag_response(query_text: str):
     total_start = time.time()
     clean_query = preprocess_query(query_text)
 
-    # If Chroma vector store is not loaded (low-memory cloud mode), answer directly with Groq
-    if db is None:
-        prompt = (
-            "You are a helpful and knowledgeable corporate HR & Policy Assistant for Puravankara Limited.\n"
-            f"User inquiry: {clean_query}\n\n"
-            "Provide a professional, clear, and structured response based on standard Indian corporate and real-estate HR guidelines."
-        )
-        answer = call_llm(prompt)
-        return {
-            "answer": answer,
-            "sources": []
-        }
+    # 1. RETRIEVE USING HIGH-PRECISION IN-MEMORY BM25 POLICY INDEX
+    from rag.policy_indexer import get_policy_index
+    idx = get_policy_index()
+    raw_results = idx.search(clean_query, top_k=4)
 
-    # 1. RETRIEVAL (k=6)
-    try:
-        results = db.similarity_search_with_score(clean_query, k=6)
-    except Exception as search_err:
-        print(f"[WARN] Vector similarity search failed ({search_err}). Falling back to Groq direct answer.")
-        prompt = (
-            "You are a helpful and knowledgeable corporate HR & Policy Assistant for Puravankara Limited.\n"
-            f"User inquiry: {clean_query}\n\n"
-            "Provide a professional, clear, and structured response based on standard Indian corporate and real-estate HR guidelines."
-        )
-        answer = call_llm(prompt)
-        return {
-            "answer": answer,
-            "sources": []
-        }
+    # Filter by minimum relevance score threshold
+    filtered_results = [r for r in raw_results if r[1] >= 1.0]
 
-    # 2. DEDUPLICATION
-    results = deduplicate_results(results)
-
-    # 3. RELEVANCE THRESHOLD FILTERING
-    MAX_DISTANCE_THRESHOLD = 1.05
-    filtered_results = []
-
-    for doc, score in results:
-        if score <= MAX_DISTANCE_THRESHOLD:
-            filtered_results.append((doc, score))
-
-    # NO FALLBACK TO ARBITRARY IRRELEVANT CHUNKS
+    # If no relevant policy documents matched
     if not filtered_results:
         return {
             "answer": "The available Puravankara policy documents do not provide sufficient information to answer your question.",
