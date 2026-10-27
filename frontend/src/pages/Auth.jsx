@@ -401,7 +401,7 @@ const Auth = () => {
             Stakeholder Grievance &amp; Complaints Portal
           </h1>
           <p className="opacity-90 mb-0 auth-hero-lead">
-            Empowering transparency, accountability, and rapid ESG redressal across all Puravankara communities.
+            Empowering transparency, accountability, and redressal across all communities.
           </p>
         </div>
 

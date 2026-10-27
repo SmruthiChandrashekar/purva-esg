@@ -228,41 +228,6 @@
   transform: translateY(-1px);
 }
 
-/* Hero Grievance Link Button (Primary Prominent Above Placement) */
-.proj-hero-grm-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 28px;
-  background: linear-gradient(135deg, #0b3558 0%, #1e5a8a 100%);
-  color: #ffffff;
-  border: 1.5px solid #e0c37b;
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: none;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
-  transition: all 0.25s ease;
-}
-
-.proj-hero-grm-btn:hover {
-  background: linear-gradient(135deg, #124570 0%, #2b7fc3 100%);
-  border-color: #ffffff;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 22px rgba(11, 53, 88, 0.5);
-}
-
-.proj-hero-grm-badge {
-  background-color: #e0c37b;
-  color: #0b3558;
-  padding: 2px 7px;
-  border-radius: 10px;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-}
-
 /* ───────── Breadcrumb Bar ───────── */
 .proj-breadcrumb-bar {
   max-width: 1240px;

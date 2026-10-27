@@ -105,19 +105,6 @@ const PurvaFooter = ({ projectName = null }) => {
           <div className="purva-footer-col">
             <h3 className="purva-footer-heading">Quick Links</h3>
             <ul className="purva-footer-links-list">
-              <li>
-                <Link
-                  to={projectName ? `/lodge-selection?project=${encodeURIComponent(projectName)}` : "/lodge-selection"}
-                  onClick={() => {
-                    if (!projectName) {
-                      sessionStorage.removeItem("purva_selected_project");
-                    }
-                  }}
-                  style={{ color: "#0b3558", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "6px" }}
-                >
-                  <span>&#9878;</span> File a Complaint
-                </Link>
-              </li>
               <li><a href="#blog">Blog</a></li>
               <li><a href="#channel-partner">Channel Partner</a></li>
               <li><a href="#careers">Careers</a></li>
@@ -134,6 +121,19 @@ const PurvaFooter = ({ projectName = null }) => {
           <div className="purva-footer-col">
             <h3 className="purva-footer-heading">Other Links</h3>
             <ul className="purva-footer-links-list">
+              <li>
+                <Link
+                  to={projectName ? `/lodge-selection?project=${encodeURIComponent(projectName)}` : "/lodge-selection"}
+                  onClick={() => {
+                    if (!projectName) {
+                      sessionStorage.removeItem("purva_selected_project");
+                    }
+                  }}
+                  style={{ color: "#0b3558", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "6px" }}
+                >
+                  <span>&#9878;</span> File a Complaint
+                </Link>
+              </li>
               <li><a href="#land-enquiry">Land Enquiry</a></li>
               <li><a href="#corporate-citizen">Corporate Citizen</a></li>
               <li><a href="#investors">Investors</a></li>

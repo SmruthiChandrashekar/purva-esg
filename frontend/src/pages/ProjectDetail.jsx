@@ -112,15 +112,6 @@ const ProjectDetail = () => {
             <button className="proj-virtual-tour-btn">
               Virtual Tour
             </button>
-
-            {/* Above Placement Option 2: Hero Section Primary Action Button */}
-            <button
-              className="proj-hero-grm-btn"
-              onClick={handleGoToGrievance}
-            >
-              <span>File a Complaint</span>
-              <span className="proj-hero-grm-badge">Resident Portal &rarr;</span>
-            </button>
           </div>
         </div>
       </section>
@@ -303,7 +294,7 @@ const ProjectDetail = () => {
       </section>
 
       {/* ── Corporate Footer with Quick Links Grievance Link ── */}
-      <PurvaFooter />
+      <PurvaFooter projectName={projectName} />
 
       {/* Backdrop & Drawer for Header Menu */}
       <div
