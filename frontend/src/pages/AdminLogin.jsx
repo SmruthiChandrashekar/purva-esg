@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthProvider";
 import { supabase } from "../services/supabaseClient";
@@ -7,6 +7,7 @@ import "./AdminLogin.css";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useLanguage();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
@@ -68,6 +69,12 @@ const AdminLogin = () => {
               <h3 className="fw-bold mb-1 admin-login-title">{t("adminPortalTitle")}</h3>
               <p className="text-muted small">{t("adminSecureAccess")}</p>
             </div>
+
+            {location.state?.message && !error && (
+              <div className="alert alert-success py-2 text-center fw-semibold fs-14">
+                {location.state.message}
+              </div>
+            )}
 
             {error && (
               <div className="alert alert-danger py-2 text-center fw-semibold fs-14">
