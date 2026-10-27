@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import chromadb
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_core.embeddings import Embeddings
 from groq import Groq
 
 # Filter out verbose deprecation warnings
@@ -25,6 +26,35 @@ load_dotenv(os.path.join(ROOT_DIR, "backend", ".env"))
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 CHROMA_PATH = os.path.join(BASE_DIR, "chroma_final")
+
+EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+
+
+class HFInferenceEmbeddings(Embeddings):
+    """
+    Same all-MiniLM-L6-v2 model as the local index, computed on Hugging Face's
+    hosted inference instead of local PyTorch. Used on low-RAM cloud hosts
+    (Render free tier) so the existing chroma_final index stays compatible.
+    Requires HF_TOKEN.
+    """
+
+    def __init__(self, token: str):
+        from huggingface_hub import InferenceClient
+        self._client = InferenceClient(model=EMBEDDING_MODEL_NAME, token=token)
+
+    def _embed(self, text: str) -> list[float]:
+        vec = self._client.feature_extraction(text)
+        # Sentence-transformers models return (384,) or (1, 384)
+        if hasattr(vec, "ndim") and vec.ndim > 1:
+            vec = vec[0]
+        return [float(x) for x in vec]
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self._embed(t) for t in texts]
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._embed(text)
+
 
 RAG_READY = False
 _RAG_INITIALIZING = False
@@ -61,8 +91,19 @@ def initialize_rag():
                     )
                 except Exception as emb_init_err:
                     print(f"[WARN] Local sentence-transformers not loaded ({emb_init_err}).")
-                    print("[INFO] Policy RAG running in lightweight cloud mode (Groq fallback).")
                     embedding_model = None
+
+            # Cloud mode: same model via Hugging Face hosted inference
+            if embedding_model is None and os.environ.get("HF_TOKEN"):
+                try:
+                    embedding_model = HFInferenceEmbeddings(os.environ["HF_TOKEN"])
+                    print("[INFO] Policy RAG using Hugging Face hosted embeddings.")
+                except Exception as hf_err:
+                    print(f"[WARN] Hugging Face hosted embeddings unavailable ({hf_err}).")
+                    embedding_model = None
+
+            if embedding_model is None:
+                print("[INFO] Policy RAG running in lightweight cloud mode (Groq fallback).")
 
             if embedding_model is not None and os.path.exists(CHROMA_PATH):
                 persistent_client = chromadb.PersistentClient(path=CHROMA_PATH)
