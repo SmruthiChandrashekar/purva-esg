@@ -74,7 +74,9 @@ def initialize_rag():
                 try:
                     db.similarity_search("leave policy", k=1)
                 except Exception as e:
-                    print("Warmup search error:", e)
+                    print(f"[WARN] HuggingFace embeddings unavailable ({e}). Switching Policy RAG to lightweight Groq cloud mode.")
+                    db = None
+                    embedding_model = None
             else:
                 db = None
 
@@ -166,7 +168,20 @@ def get_rag_response(query_text: str):
         }
 
     # 1. RETRIEVAL (k=6)
-    results = db.similarity_search_with_score(clean_query, k=6)
+    try:
+        results = db.similarity_search_with_score(clean_query, k=6)
+    except Exception as search_err:
+        print(f"[WARN] Vector similarity search failed ({search_err}). Falling back to Groq direct answer.")
+        prompt = (
+            "You are a helpful and knowledgeable corporate HR & Policy Assistant for Puravankara Limited.\n"
+            f"User inquiry: {clean_query}\n\n"
+            "Provide a professional, clear, and structured response based on standard Indian corporate and real-estate HR guidelines."
+        )
+        answer = call_llm(prompt)
+        return {
+            "answer": answer,
+            "sources": []
+        }
 
     # 2. DEDUPLICATION
     results = deduplicate_results(results)
