@@ -134,6 +134,19 @@ def preprocess_query(query: str) -> str:
     return cleaned
 
 
+def deduplicate_results(results):
+    """Remove exact duplicate chunks or near-identical text from search results."""
+    seen_texts = set()
+    deduped = []
+    for doc, score in results:
+        text_content = getattr(doc, "page_content", str(doc))
+        text_key = re.sub(r'\s+', ' ', text_content[:200]).strip()
+        if text_key not in seen_texts:
+            seen_texts.add(text_key)
+            deduped.append((doc, score))
+    return deduped
+
+
 def get_rag_response(query_text: str):
     if not RAG_READY:
         initialize_rag()
