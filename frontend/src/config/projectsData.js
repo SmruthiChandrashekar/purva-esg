@@ -1,3 +1,5 @@
+import { API_BASE_URL } from "../services/supabaseClient";
+
 export const PURVA_CITIES_PROJECTS = {
   "Bengaluru": [
     {
@@ -159,7 +161,7 @@ export const PURVA_CITIES = Object.keys(PURVA_CITIES_PROJECTS);
 export const fetchProjectsFromServer = async (city = null) => {
   try {
     const url = city ? `/api/projects?city=${encodeURIComponent(city)}` : "/api/projects";
-    const res = await fetch(`http://localhost:8000${url}`);
+    const res = await fetch(`${API_BASE_URL}${url}`);
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.projects) && data.projects.length > 0) {

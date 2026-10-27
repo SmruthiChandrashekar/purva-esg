@@ -95,14 +95,22 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 app = FastAPI(title="Puravankara GRM Backend")
 
 # --- CORS ---
+cors_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+]
+frontend_url_env = os.getenv("FRONTEND_URL")
+if frontend_url_env:
+    for u in frontend_url_env.split(","):
+        clean_url = u.strip().rstrip("/")
+        if clean_url and clean_url not in cors_origins:
+            cors_origins.append(clean_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-    ],
+    allow_origins=cors_origins,
     allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
