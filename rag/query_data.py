@@ -29,31 +29,63 @@ CHROMA_PATH = os.path.join(BASE_DIR, "chroma_final")
 
 EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
+# Vector matches farther than this (Chroma L2 distance) are treated as unrelated
+VECTOR_MAX_DISTANCE = 1.3
+# BM25 matches below this score are treated as unrelated
+BM25_MIN_SCORE = 1.0
+# Vector ranks count 1.5x in the fusion: complaints are usually paraphrased,
+# and keyword-only ranking sent "touched me inappropriately" to travel policy
+VECTOR_WEIGHT = 1.5
+# After the embedding service fails, skip it for this long instead of
+# making every chat request wait on a timeout
+EMBED_COOLDOWN_SECONDS = 60
 
-class HFInferenceEmbeddings(Embeddings):
+
+class SpaceEmbeddings(Embeddings):
     """
-    Same all-MiniLM-L6-v2 model as the local index, computed on Hugging Face's
-    hosted inference instead of local PyTorch. Used on low-RAM cloud hosts
-    (Render free tier) so the existing chroma_final index stays compatible.
-    Requires HF_TOKEN.
+    Same all-MiniLM-L6-v2 model as chroma_final, served by our Hugging Face
+    Space (deploy/hf-embed-space). Used on Render, where PyTorch doesn't fit
+    in memory. Configured with EMBED_URL and EMBED_KEY, plus HF_TOKEN for
+    the Space's ZeroGPU quota.
     """
 
-    def __init__(self, token: str):
-        from huggingface_hub import InferenceClient
-        self._client = InferenceClient(model=EMBEDDING_MODEL_NAME, token=token)
+    def __init__(self, url: str, key: str, hf_token: str = ""):
+        self._url = url.rstrip("/") + "/gradio_api/call/embed"
+        self._key = key
+        # The Space runs on ZeroGPU: calls sent with a token use that
+        # account's GPU quota instead of the much smaller anonymous one
+        self._headers = {"Authorization": f"Bearer {hf_token}"} if hf_token else {}
 
-    def _embed(self, text: str) -> list[float]:
-        vec = self._client.feature_extraction(text)
-        # Sentence-transformers models return (384,) or (1, 384)
-        if hasattr(vec, "ndim") and vec.ndim > 1:
-            vec = vec[0]
-        return [float(x) for x in vec]
+    def _embed(self, texts: list[str]) -> list[list[float]]:
+        import json
+        import requests
+
+        # Gradio's HTTP API: POST queues the call, GET streams the result
+        start = requests.post(
+            self._url, json={"data": [texts, self._key]}, headers=self._headers, timeout=(5, 25)
+        )
+        start.raise_for_status()
+        event_id = start.json()["event_id"]
+
+        # Allow time for ZeroGPU to attach a GPU from its shared pool
+        result = requests.get(f"{self._url}/{event_id}", headers=self._headers, timeout=(5, 40))
+        result.raise_for_status()
+        event = None
+        for line in result.text.splitlines():
+            if line.startswith("event:"):
+                event = line.split(":", 1)[1].strip()
+            elif line.startswith("data:") and event in ("complete", "error"):
+                payload = json.loads(line.split(":", 1)[1])
+                if event == "error":
+                    raise RuntimeError(f"Embedding service error: {payload}")
+                return payload[0]
+        raise RuntimeError("Embedding service returned no result")
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return [self._embed(t) for t in texts]
+        return self._embed(texts)
 
     def embed_query(self, text: str) -> list[float]:
-        return self._embed(text)
+        return self._embed([text])[0]
 
 
 RAG_READY = False
@@ -61,6 +93,39 @@ _RAG_INITIALIZING = False
 _init_lock = threading.Lock()
 embedding_model = None
 db = None
+_embed_failed_at = 0.0
+
+
+def _load_vector_store():
+    """
+    Open chroma_final for meaning-based search, if we have a way to embed
+    queries: local sentence-transformers first, then the HF Space.
+    Leaves db as None (BM25-only search) when neither is available.
+    """
+    global embedding_model, db
+
+    if not os.path.exists(CHROMA_PATH):
+        print("[INFO] No chroma_final index found — using BM25 search only.")
+        return
+
+    try:
+        embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        print("[INFO] Vector search using local sentence-transformers.")
+    except Exception as emb_err:
+        print(f"[INFO] Local sentence-transformers not available ({emb_err}).")
+        embed_url = os.environ.get("EMBED_URL")
+        if not embed_url:
+            print("[INFO] EMBED_URL not set — using BM25 search only.")
+            return
+        embedding_model = SpaceEmbeddings(
+            embed_url, os.environ.get("EMBED_KEY", ""), os.environ.get("HF_TOKEN", "")
+        )
+        print(f"[INFO] Vector search using embedding service at {embed_url}.")
+
+    db = Chroma(
+        client=chromadb.PersistentClient(path=CHROMA_PATH),
+        embedding_function=embedding_model,
+    )
 
 
 def initialize_rag():
@@ -77,6 +142,10 @@ def initialize_rag():
             start_time = time.time()
             from rag.policy_indexer import get_policy_index
             idx = get_policy_index()
+            try:
+                _load_vector_store()
+            except Exception as e:
+                print(f"[WARN] Vector store unavailable, using BM25 only: {e}")
             RAG_READY = True
             print(f"[OK] Policy RAG Ready (Indexed {len(idx.chunks)} chunks across Puravankara policies in {round(time.time() - start_time, 2)}s)\n")
         except Exception as e:
@@ -84,6 +153,58 @@ def initialize_rag():
             RAG_READY = True
         finally:
             _RAG_INITIALIZING = False
+
+
+def _vector_search(query: str, k: int) -> list:
+    """Meaning-based matches from chroma_final, or [] if unavailable."""
+    global _embed_failed_at
+    if db is None or time.time() - _embed_failed_at < EMBED_COOLDOWN_SECONDS:
+        return []
+    try:
+        results = db.similarity_search_with_score(query, k=k)
+    except Exception as e:
+        _embed_failed_at = time.time()
+        print(f"[WARN] Vector search failed, using BM25 only for {EMBED_COOLDOWN_SECONDS}s: {e}")
+        return []
+    return [(doc, dist) for doc, dist in results if dist <= VECTOR_MAX_DISTANCE]
+
+
+def search_policies(query: str, top_k: int = 4) -> list:
+    """
+    Hybrid policy search: BM25 keyword matches plus meaning-based vector
+    matches, merged with reciprocal rank fusion. BM25 catches exact policy
+    wording; vectors catch paraphrases ("touched me inappropriately" -> POSH).
+    Falls back to BM25 alone when vector search is unavailable.
+
+    Returns [(chunk, fused_score)] best first; chunks expose .page_content
+    and .metadata.
+    """
+    if not RAG_READY:
+        initialize_rag()
+
+    from rag.policy_indexer import get_policy_index
+    candidates = top_k * 2
+    bm25_hits = [
+        (doc, s) for doc, s in get_policy_index().search(query, top_k=candidates)
+        if s >= BM25_MIN_SCORE
+    ]
+    vector_hits = _vector_search(query, candidates)
+
+    fused = {}
+    for weight, hits in ((1.0, bm25_hits), (VECTOR_WEIGHT, vector_hits)):
+        # Both indexes contain duplicate chunks; count each once per list,
+        # or duplicates outrank a single better match
+        seen = set()
+        for rank, (doc, _) in enumerate(hits):
+            key = re.sub(r"\s+", " ", doc.page_content[:200]).strip()
+            if key in seen:
+                continue
+            seen.add(key)
+            entry = fused.setdefault(key, [doc, 0.0])
+            entry[1] += weight / (60 + rank)
+
+    ranked = sorted(fused.values(), key=lambda e: e[1], reverse=True)
+    return [(doc, score) for doc, score in ranked[:top_k]]
 
 
 def is_rag_ready():
@@ -154,13 +275,8 @@ def get_rag_response(query_text: str):
     total_start = time.time()
     clean_query = preprocess_query(query_text)
 
-    # 1. RETRIEVE USING HIGH-PRECISION IN-MEMORY BM25 POLICY INDEX
-    from rag.policy_indexer import get_policy_index
-    idx = get_policy_index()
-    raw_results = idx.search(clean_query, top_k=4)
-
-    # Filter by minimum relevance score threshold
-    filtered_results = [r for r in raw_results if r[1] >= 1.0]
+    # 1. RETRIEVE: hybrid BM25 + vector search (BM25 only if vectors unavailable)
+    filtered_results = search_policies(clean_query, top_k=4)
 
     # If no relevant policy documents matched
     if not filtered_results:

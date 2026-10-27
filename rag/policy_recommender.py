@@ -21,16 +21,8 @@ from rag.query_data import (
     is_rag_ready,
     call_llm,
     preprocess_query,
-    deduplicate_results,
+    search_policies,
 )
-
-
-def _get_db():
-    """Retrieve the Chroma vector store instance from query_data."""
-    import rag.query_data as qd
-    if not qd.is_rag_ready():
-        qd.initialize_rag()
-    return qd.db
 
 
 def generate_policy_recommendation(
@@ -68,24 +60,11 @@ def generate_policy_recommendation(
     enhanced_query = f"{category} policy {grievance_text}"
     cleaned_query = preprocess_query(enhanced_query)
 
-    db = _get_db()
-    if db:
-        try:
-            raw_results = db.similarity_search_with_score(cleaned_query, k=6)
-            deduped = deduplicate_results(raw_results)
-            MAX_DISTANCE_THRESHOLD = 1.15
-            matching_chunks = [
-                (doc, score) for doc, score in deduped if score <= MAX_DISTANCE_THRESHOLD
-            ]
-        except Exception as e:
-            logger.error("Vector search error in policy recommender: %s", e)
-            matching_chunks = []
-    else:
-        from rag.policy_indexer import get_policy_index
-        idx = get_policy_index()
-        raw_results = idx.search(cleaned_query, top_k=6)
-        deduped = deduplicate_results(raw_results)
-        matching_chunks = [(doc, score) for doc, score in deduped if score >= 1.0]
+    try:
+        matching_chunks = search_policies(cleaned_query, top_k=6)
+    except Exception as e:
+        logger.error("Policy search error in policy recommender: %s", e)
+        matching_chunks = []
 
     has_policy_match = len(matching_chunks) > 0
 
