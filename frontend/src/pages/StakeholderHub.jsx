@@ -13,7 +13,6 @@ const StakeholderHub = () => {
   const [chatInput, setChatInput] = useState("");
 
   const displayName = userDetails?.name || user?.user_metadata?.name || user?.email?.split("@")[0] || "Stakeholder";
-  const userRole = userDetails?.user_type || "Stakeholder";
 
   const projectParam = new URLSearchParams(window.location.search).get("project") || sessionStorage.getItem("purva_selected_project");
   const activeProjectObj = projectParam ? findProjectByNameOrId(projectParam) : null;
@@ -48,7 +47,6 @@ const StakeholderHub = () => {
   const sampleQuestions = [
     "Report noise or dust pollution",
     "Resolution timeline & SLAs",
-    "Upload photo proof for defects",
     "Can I file anonymously?"
   ];
 
@@ -59,10 +57,6 @@ const StakeholderHub = () => {
         <div className="container">
           <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
             <div>
-              <div className="d-flex align-items-center gap-2 mb-1">
-                <span className="hub-badge-role">{userRole}</span>
-                <span className="hub-badge-corp">ESG GRM</span>
-              </div>
               <h1 className="hub-hero-title mb-1">
                 Welcome, {displayName}
               </h1>
@@ -84,8 +78,8 @@ const StakeholderHub = () => {
       <div className="container py-4">
         <div className="row g-4 align-items-stretch">
 
-          {/* ── LEFT COLUMN: LODGE & TRACK ── */}
-          <div className="col-lg-6 d-flex flex-column gap-4">
+          {/* ── LEFT: LODGE A COMPLAINT ── */}
+          <div className="col-lg-6 d-flex flex-column">
 
             {/* CARD 1: LODGE A COMPLAINT */}
             <div className="hub-action-card hub-card-lodge flex-grow-1">
@@ -109,7 +103,7 @@ const StakeholderHub = () => {
               </div>
 
               {activeProjectObj ? (
-                <div className="p-2 mb-3 rounded-3 bg-white border border-danger-subtle d-flex align-items-center justify-content-between gap-2 shadow-xs">
+                <div className="hub-project-card p-2 mb-3 rounded-3 bg-white border border-danger-subtle d-flex align-items-center justify-content-between gap-2 shadow-xs">
                   <div className="d-flex align-items-center gap-2 overflow-hidden">
                     <img
                       src={activeProjectObj.image || "/purva_heritage.jpg"}
@@ -128,7 +122,7 @@ const StakeholderHub = () => {
                           </span>
                         )}
                       </div>
-                      <div className="fw-bold text-navy text-truncate" style={{ fontSize: "0.85rem" }}>
+                      <div className="hub-project-name fw-bold text-navy text-truncate" style={{ fontSize: "0.85rem" }}>
                         {activeProjectObj.name}
                       </div>
                       <div className="text-muted text-truncate" style={{ fontSize: "0.74rem" }}>
@@ -159,50 +153,9 @@ const StakeholderHub = () => {
                 </Link>
               </div>
             </div>
-
-            {/* CARD 2: TRACK A COMPLAINT */}
-            <div className="hub-action-card hub-card-track flex-grow-1">
-              <div className="hub-card-header mb-3">
-                <div className="hub-icon-wrapper hub-icon-navy">
-                  <i className="bi bi-search"></i>
-                </div>
-                <div>
-                  <h3 className="hub-card-title">Track a Complaint</h3>
-                  <p className="hub-card-desc mb-0">
-                    Check real-time status and verified resolution proof.
-                  </p>
-                </div>
-              </div>
-
-              {/* INLINE TRACKER */}
-              <form onSubmit={handleTrackSubmit} className="mb-3">
-                <div className="input-group">
-                  <input
-                    type="text"
-                    className="form-control hub-track-input"
-                    placeholder="Enter Tracking ID..."
-                    value={trackInput}
-                    onChange={(e) => setTrackInput(e.target.value)}
-                  />
-                  <button type="submit" className="btn hub-btn-navy px-3 fw-semibold">
-                    Track &rarr;
-                  </button>
-                </div>
-              </form>
-
-              <div className="d-flex justify-content-between align-items-center small pt-1">
-                <Link to="/track" className="hub-link-subtle">
-                  <i className="bi bi-shield-lock me-1"></i> Track with PIN
-                </Link>
-                <Link to="/dashboard" className="hub-link-navy fw-semibold">
-                  Dashboard History &rarr;
-                </Link>
-              </div>
-            </div>
-
           </div>
 
-          {/* ── RIGHT COLUMN: ASK PURVA (CHATBOT) ── */}
+          {/* ── RIGHT: ASK PURVA (CHATBOT) ── */}
           <div className="col-lg-6">
             <div className="hub-chatbot-card h-100 d-flex flex-column justify-content-between">
               <div>
@@ -269,6 +222,49 @@ const StakeholderHub = () => {
                     Open Fullscreen Assistant &rarr;
                   </Link>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── BOTTOM: TRACK A COMPLAINT ── */}
+          <div className="col-12">
+            {/* CARD 2: TRACK A COMPLAINT */}
+            <div className="hub-action-card hub-card-track">
+              <div className="hub-card-header mb-3">
+                <div className="hub-icon-wrapper hub-icon-navy">
+                  <i className="bi bi-search"></i>
+                </div>
+                <div>
+                  <h3 className="hub-card-title">Track a Complaint</h3>
+                  <p className="hub-card-desc mb-0">
+                    Check real-time status and verified resolution proof.
+                  </p>
+                </div>
+              </div>
+
+              {/* INLINE TRACKER */}
+              <form onSubmit={handleTrackSubmit} className="mb-3">
+                <div className="input-group">
+                  <input
+                    type="text"
+                    className="form-control hub-track-input"
+                    placeholder="Enter Tracking ID..."
+                    value={trackInput}
+                    onChange={(e) => setTrackInput(e.target.value)}
+                  />
+                  <button type="submit" className="btn hub-btn-navy px-3 fw-semibold">
+                    Track &rarr;
+                  </button>
+                </div>
+              </form>
+
+              <div className="d-flex justify-content-between align-items-center small pt-1">
+                <Link to="/track" className="hub-link-subtle">
+                  <i className="bi bi-shield-lock me-1"></i> Track with PIN
+                </Link>
+                <Link to="/dashboard" className="hub-link-navy fw-semibold">
+                  Dashboard History &rarr;
+                </Link>
               </div>
             </div>
           </div>

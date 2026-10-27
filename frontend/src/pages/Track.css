@@ -80,3 +80,24 @@
   border-left-color: #c62828;
   color: #7f1d1d;
 }
+
+/* Dark theme: .text-navy / .bg-navy are fixed dark navy and vanish on the dark surface */
+[data-theme="dark"] .track-page .text-navy {
+  color: var(--heading-color) !important;
+}
+
+[data-theme="dark"] .btn.track-btn.bg-navy {
+  background-color: var(--accent) !important;
+  --bs-btn-border-color: var(--accent);
+  --bs-btn-hover-border-color: var(--accent-h);
+  --bs-btn-active-border-color: var(--accent-h);
+  --bs-btn-disabled-border-color: var(--accent);
+}
+
+[data-theme="dark"] .btn.track-btn.bg-navy:hover:not(:disabled) {
+  background-color: var(--accent-h) !important;
+}
+
+[data-theme="dark"] .form-control.track-id-input:not(.is-invalid) {
+  border-color: var(--line);
+}
