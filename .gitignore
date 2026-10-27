@@ -90,3 +90,7 @@ PROJECT_STATUS.md
 rag/project_audit.md
 skills-lock.json
 claude_skills.md
+
+# The policy vector index ships with the repo so cloud deploys can search it
+!rag/chroma_final/*.sqlite3
+!rag/chroma_final/**/*.bin
