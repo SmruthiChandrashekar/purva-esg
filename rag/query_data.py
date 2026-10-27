@@ -17,14 +17,13 @@ warnings.filterwarnings("ignore", message=".*LangChainDeprecationWarning.*")
 
 # Load environment variables
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ENV_PATH = os.path.join(os.path.dirname(BASE_DIR), "backend", ".env")
-load_dotenv(ENV_PATH)
+ROOT_DIR = os.path.dirname(BASE_DIR)
+load_dotenv()
+load_dotenv(os.path.join(ROOT_DIR, ".env"))
+load_dotenv(os.path.join(ROOT_DIR, "backend", ".env"))
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-if not GROQ_API_KEY:
-    raise RuntimeError(f"GROQ_API_KEY not set in {ENV_PATH}")
-
-client = Groq(api_key=GROQ_API_KEY)
+client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 CHROMA_PATH = os.path.join(BASE_DIR, "chroma_final")
 
 RAG_READY = False
@@ -97,9 +96,17 @@ GROQ_MODEL = os.environ.get("GROQ_MODEL", "qwen/qwen3.8-27b")
 
 
 def call_llm(prompt: str) -> str:
+    global client
+    if client is None:
+        key = os.environ.get("GROQ_API_KEY")
+        if key:
+            client = Groq(api_key=key)
+        else:
+            return "Error: GROQ_API_KEY not configured."
     try:
+        model = os.environ.get("GROQ_MODEL", "qwen/qwen3.8-27b")
         response = client.chat.completions.create(
-            model=GROQ_MODEL,
+            model=model,
             messages=[
                 {"role": "user", "content": prompt}
             ],

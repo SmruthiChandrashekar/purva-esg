@@ -7,7 +7,10 @@ import json
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
+# Load .env from working directory, root directory, and backend directory
+load_dotenv()
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 import asyncio
 import logging
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
@@ -904,6 +907,8 @@ async def chat_with_agent(request: ChatRequest):
         )
 
         response_en = agent_result.get("response", "I'm sorry, I couldn't process your request.")
+        if agent_result.get("error"):
+            logging.error("[AGENT GRAPH ERROR]: %s", agent_result.get("error"))
 
         # Step 4 — Translate response back to user's language
         final_response = translate_text(response_en, user_lang)
