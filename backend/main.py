@@ -53,6 +53,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 from rag.query_data import initialize_rag, is_rag_ready, is_rag_initializing, get_rag_response
 from rag.policy_recommender import generate_policy_recommendation
+from rag.rejection_advisor import evaluate_rejection_reason
 from backend.agent.graph import run_agent
 from backend.agent.nodes.classify_severity import classify_severity_node
 from backend.agent.nodes.classify_department import classify_department_node
@@ -343,6 +344,11 @@ class UpdateStatusRequest(BaseModel):
     resolution_reason: Optional[str] = None
     notes: Optional[str] = None
     attachments: list[dict] = []
+    policy_advice: Optional[dict] = None
+
+class RejectionAdviceRequest(BaseModel):
+    grievance_id: str
+    rejection_reason: str
 
 class EscalateGrievanceRequest(BaseModel):
     grievance_id: str
@@ -1535,6 +1541,8 @@ async def update_grievance_status(request: UpdateStatusRequest, user: dict = Dep
                 "timestamp": now_iso,
                 "is_rejection_proposal": True,
             }
+            if request.policy_advice:
+                history_item["policy_advice"] = request.policy_advice
             if status_attachments:
                 history_item["attachments"] = status_attachments
                 history_item["visible_to_complainant"] = False
@@ -1578,13 +1586,18 @@ async def update_grievance_status(request: UpdateStatusRequest, user: dict = Dep
         try:
             curr_res = supabase.table("grievances").select("escalation_history").eq("grievance_id", request.grievance_id).single().execute()
             history = list((curr_res.data or {}).get("escalation_history") or [])
+            action_label = f"Status updated to {request.status}"
+            if request.policy_advice and request.status in ("Investigating", "Open"):
+                action_label = f"Policy advice adopted by {user_tier} — continuing investigation"
             history_item = {
                 "tier": user_tier,
                 "handler": user_email,
-                "action": f"Status updated to {request.status}",
+                "action": action_label,
                 "notes": reason_text,
                 "timestamp": now_iso
             }
+            if request.policy_advice:
+                history_item["policy_advice"] = request.policy_advice
             if status_attachments:
                 history_item["attachments"] = status_attachments
                 history_item["visible_to_complainant"] = True
@@ -1932,6 +1945,52 @@ async def regenerate_grievance_rag_recommendation(grievance_id: str, user: dict 
         logging.error("Failed to regenerate RAG recommendation: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/api/admin/grievances/{grievance_id}/rejection-advice")
+async def get_rejection_advice(
+    grievance_id: str,
+    request: RejectionAdviceRequest,
+    user: dict = Depends(require_admin)
+):
+    """
+    Evaluates an L1/L2/L3 officer's proposed rejection reason against official
+    Puravankara policies, returning actionable advice, citations, and a go-ahead/revise verdict.
+    """
+    try:
+        res = (
+            supabase.table("grievances")
+            .select("grievance_id, description, department, category, assigned_tier, status")
+            .eq("grievance_id", grievance_id)
+            .single()
+            .execute()
+        )
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Grievance not found")
+
+        grievance = res.data
+        officer_tier = user.get("admin_tier") or user.get("role") or "L1"
+        rejection_reason = (request.rejection_reason or "").strip()
+        if not rejection_reason:
+            raise HTTPException(status_code=400, detail="Rejection reason is required to evaluate policy compliance.")
+
+        advice = await asyncio.to_thread(
+            evaluate_rejection_reason,
+            grievance_text=grievance.get("description", ""),
+            rejection_reason=rejection_reason,
+            category=grievance.get("category") or grievance.get("department") or "General",
+            officer_tier=officer_tier,
+            grievance_id=grievance_id
+        )
+
+        return {
+            "grievance_id": grievance_id,
+            "advice": advice
+        }
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        logging.error("Failed to generate rejection policy advice: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ─── NOTIFICATION ENDPOINTS ───────────────────────────────────────────
