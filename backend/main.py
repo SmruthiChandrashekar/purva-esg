@@ -809,7 +809,8 @@ def invite_admin_user(request: InviteRequest, http_request: Request, user: dict 
         }
         supabase.table("users").insert(user_data).execute()
         
-        log_audit(supabase, "INVITE_USER", user, new_user_id, None, request.role, {"email": request.email})
+        log_audit(supabase, "INVITE_USER", user, new_user_id, request.email, None, request.role,
+                  {"department": invite_dept, "admin_tier": invite_tier})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -839,7 +840,7 @@ def resend_staff_invite(target_id: str, http_request: Request, user: dict = Depe
     role_label = _staff_role_label(staff["role"], staff.get("department"), staff.get("admin_tier"))
     if not _email_staff_access(base_url, staff["email"], staff.get("name"), role_label, link, link_type):
         raise HTTPException(status_code=502, detail="Could not send the email. Check the server's SMTP settings.")
-    log_audit(supabase, "RESEND_INVITE", user, target_id, None, link_type, {"email": staff["email"]})
+    log_audit(supabase, "RESEND_INVITE", user, target_id, staff["email"], None, link_type)
     return {"status": "success", "type": link_type}
 
 @app.put("/api/admin/users/{target_id}/status")
@@ -849,7 +850,7 @@ def update_user_status(target_id: str, request: StatusUpdateRequest, user: dict 
         
         status_text = "ACTIVATED" if request.is_active else "DEACTIVATED"
         target_email = result.data[0]["email"] if result.data else target_id
-        log_audit(supabase, f"{status_text}_USER", user, target_id, None, str(request.is_active), {"email": target_email})
+        log_audit(supabase, f"{status_text}_USER", user, target_id, target_email, None, str(request.is_active))
         
         return {"status": "success"}
     except Exception as e:
