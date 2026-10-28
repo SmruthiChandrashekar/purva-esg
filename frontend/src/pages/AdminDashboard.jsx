@@ -68,6 +68,11 @@ const AdminDashboard = () => {
   const [attachmentsUploading, setAttachmentsUploading] = useState(false);
   const [submittingStatus, setSubmittingStatus] = useState(false);
 
+  // Policy Engine Rejection advice state
+  const [checkingRejectionPolicy, setCheckingRejectionPolicy] = useState(false);
+  const [rejectionPolicyAdvice, setRejectionPolicyAdvice] = useState(null);
+  const [rejectionCheckError, setRejectionCheckError] = useState("");
+
   // Manual escalation state
   const [escalatingTicket, setEscalatingTicket] = useState(null);
   const [escalationReason, setEscalationReason] = useState("");
@@ -344,9 +349,12 @@ const AdminDashboard = () => {
     });
     setResolutionReason("");
     setStatusAttachments([]);
+    setRejectionPolicyAdvice(null);
+    setCheckingRejectionPolicy(false);
+    setRejectionCheckError("");
   };
 
-  const _submitStatusUpdate = async (grievanceId, newStatus, reason, attachments = []) => {
+  const _submitStatusUpdate = async (grievanceId, newStatus, reason, attachments = [], policyAdvice = null) => {
     setUpdatingId(grievanceId);
     setSubmittingStatus(true);
     try {
@@ -357,6 +365,7 @@ const AdminDashboard = () => {
           status: newStatus,
           resolution_reason: reason || undefined,
           attachments,
+          policy_advice: policyAdvice || undefined,
         }),
       });
       if (!res.ok) {
@@ -394,6 +403,9 @@ const AdminDashboard = () => {
       setPendingStatusChange(null);
       setResolutionReason("");
       setStatusAttachments([]);
+      setRejectionPolicyAdvice(null);
+      setCheckingRejectionPolicy(false);
+      setRejectionCheckError("");
     } catch (err) {
       alert("Failed to update status: " + err.message);
     } finally {
@@ -472,13 +484,52 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleResolutionSubmit = () => {
+  const handleResolutionSubmit = (overrideAdvice = null) => {
     if (!resolutionReason.trim()) return;
     _submitStatusUpdate(
       pendingStatusChange.grievanceId,
       pendingStatusChange.newStatus,
       resolutionReason.trim(),
-      statusAttachments
+      statusAttachments,
+      overrideAdvice || rejectionPolicyAdvice
+    );
+  };
+
+  const handleCheckRejectionPolicy = async () => {
+    if (!resolutionReason.trim() || !pendingStatusChange?.grievanceId) return;
+    setCheckingRejectionPolicy(true);
+    setRejectionCheckError("");
+    try {
+      const res = await apiClient(`/api/admin/grievances/${pendingStatusChange.grievanceId}/rejection-advice`, {
+        method: "POST",
+        body: JSON.stringify({
+          grievance_id: pendingStatusChange.grievanceId,
+          rejection_reason: resolutionReason.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to evaluate policy compliance");
+      }
+      const data = await res.json();
+      setRejectionPolicyAdvice(data.advice || null);
+    } catch (err) {
+      setRejectionCheckError(err.message || "Failed to query Policy Engine.");
+    } finally {
+      setCheckingRejectionPolicy(false);
+    }
+  };
+
+  const handleAdoptPolicyAdvice = async () => {
+    if (!pendingStatusChange?.grievanceId) return;
+    const note = `[POLICY ADVICE ADOPTED] Policy: ${rejectionPolicyAdvice?.policy_name || "Puravankara Policy"} (${rejectionPolicyAdvice?.section || "Resolution Protocol"})\nAdvice: ${rejectionPolicyAdvice?.advice || ""}\nAction taken: ${rejectionPolicyAdvice?.recommended_action || "Continuing investigation based on policy advice."}`;
+    
+    await _submitStatusUpdate(
+      pendingStatusChange.grievanceId,
+      "Investigating",
+      note,
+      statusAttachments,
+      rejectionPolicyAdvice
     );
   };
 
@@ -1586,6 +1637,35 @@ ${ragRecommendation.compliance_notes || ""}`;
                             </div>
                           </div>
                         </div>
+
+                        {(() => {
+                          const proposalItem = Array.isArray(selectedTicket.escalation_history)
+                            ? [...selectedTicket.escalation_history].reverse().find(e => e.is_rejection_proposal || e.policy_advice)
+                            : null;
+                          const advice = proposalItem?.policy_advice;
+                          if (!advice) return null;
+                          const isCompliant = advice.verdict === "GO_AHEAD";
+                          return (
+                            <div className={`mt-2 p-2 rounded-2 border fs-12 ${isCompliant ? "bg-success-subtle border-success-subtle" : "bg-warning-subtle border-warning-subtle"}`}>
+                              <div className="fw-semibold text-dark d-flex align-items-center gap-1 mb-1">
+                                <i className={`bi ${isCompliant ? "bi-check-circle-fill text-success" : "bi-exclamation-triangle-fill text-warning"} me-1`} />
+                                <span>AI Policy Advisor Assessment: {isCompliant ? "Compliant with Policy" : "Alternative Resolution Advised"}</span>
+                              </div>
+                              <div className="text-secondary">{advice.summary || advice.advice}</div>
+                              {advice.recommended_action && !isCompliant && (
+                                <div className="mt-1 text-dark fw-medium">
+                                  Policy Recommended Action: <span className="fw-normal text-secondary">{advice.recommended_action}</span>
+                                </div>
+                              )}
+                              {advice.policy_name && (
+                                <div className="text-theme-muted fs-11 mt-1">
+                                  Ref: {advice.policy_name} ({advice.section || "Protocol"})
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
                         {isHOD && (
                           <div className="d-flex gap-2 mt-2 flex-wrap">
                             <button
@@ -2104,16 +2184,85 @@ ${ragRecommendation.compliance_notes || ""}`;
                     {cfg.label}
                   </label>
                   <div className="fs-12 text-theme-muted mb-2">{cfg.description}</div>
-                  <textarea
+                    <textarea
                     id="status-reason"
                     className="form-control fs-14 admin-textarea"
                     rows={4}
                     autoFocus
                     placeholder={cfg.placeholder}
                     value={resolutionReason}
-                    onChange={(e) => setResolutionReason(e.target.value)}
+                    onChange={(e) => {
+                      setResolutionReason(e.target.value);
+                      if (rejectionPolicyAdvice) setRejectionPolicyAdvice(null);
+                    }}
                   />
                   <div className="fs-12 text-theme-muted mt-2">Required for every status change.</div>
+
+                  {/* Policy Engine Check Button for Maker Rejections */}
+                  {isMaker && pendingStatusChange.newStatus === "Rejected" && (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        className="btn btn-outline-primary btn-sm rounded-pill px-3 py-1 d-inline-flex align-items-center gap-2 shadow-sm"
+                        disabled={!resolutionReason.trim() || checkingRejectionPolicy}
+                        onClick={handleCheckRejectionPolicy}
+                      >
+                        {checkingRejectionPolicy ? (
+                          <><span className="spinner-border spinner-border-sm" /> Querying Policy Engine…</>
+                        ) : (
+                          <><i className="bi bi-shield-check" /> Check with Policy Engine & Get Advice</>
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Loading State */}
+                  {isMaker && pendingStatusChange.newStatus === "Rejected" && checkingRejectionPolicy && (
+                    <div className="mt-3 p-3 rounded-3 border bg-light d-flex align-items-center gap-3">
+                      <div className="spinner-border text-primary spinner-border-sm" role="status" />
+                      <div className="fs-13 text-secondary">
+                        Consulting Puravankara Policy database & evaluating compliance…
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error State */}
+                  {isMaker && pendingStatusChange.newStatus === "Rejected" && rejectionCheckError && (
+                    <div className="mt-3 alert alert-danger fs-13 py-2 px-3 mb-0 d-flex justify-content-between align-items-center">
+                      <span>{rejectionCheckError}</span>
+                      <button type="button" className="btn btn-link btn-sm p-0 text-danger" onClick={handleCheckRejectionPolicy}>Retry</button>
+                    </div>
+                  )}
+
+                  {/* Policy Advice Card */}
+                  {isMaker && pendingStatusChange.newStatus === "Rejected" && rejectionPolicyAdvice && (
+                    <div className={`mt-3 p-3 rounded-3 border ${rejectionPolicyAdvice.verdict === "GO_AHEAD" ? "border-success-subtle bg-success-subtle" : "border-warning-subtle bg-warning-subtle"}`}>
+                      <div className="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-1">
+                        <span className={`badge ${rejectionPolicyAdvice.verdict === "GO_AHEAD" ? "bg-success" : "bg-warning text-dark"} px-2 py-1`}>
+                          <i className={`bi ${rejectionPolicyAdvice.verdict === "GO_AHEAD" ? "bi-check-circle" : "bi-exclamation-triangle"} me-1`} />
+                          {rejectionPolicyAdvice.verdict === "GO_AHEAD" ? "Policy Verified: Rejection Justified" : "Policy Advice: Review Recommended"}
+                        </span>
+                        <span className="fs-11 text-secondary fw-medium">
+                          {rejectionPolicyAdvice.policy_name} ({rejectionPolicyAdvice.section || "Resolution Protocol"})
+                        </span>
+                      </div>
+
+                      <div className="fs-13 fw-semibold text-dark mb-1">
+                        {rejectionPolicyAdvice.summary}
+                      </div>
+                      <div className="fs-12 text-secondary mb-2" style={{ whiteSpace: "pre-wrap" }}>
+                        {rejectionPolicyAdvice.advice}
+                      </div>
+
+                      {rejectionPolicyAdvice.recommended_action && (
+                        <div className="p-2 rounded bg-white bg-opacity-75 border fs-12 mb-2">
+                          <strong className="text-dark">Recommended Next Step: </strong>
+                          <span className="text-secondary">{rejectionPolicyAdvice.recommended_action}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="mt-3">
                     <AdminAttachmentPicker
                       value={statusAttachments}
@@ -2133,18 +2282,74 @@ ${ragRecommendation.compliance_notes || ""}`;
                   >
                     Cancel
                   </button>
-                  <button
-                    type="button"
-                    className={`btn btn-sm rounded-pill px-4 ${cfg.tone === "danger" ? "btn-danger" : cfg.tone === "ok" ? "btn-primary btn-confirm-ok" : "btn-primary"}`}
-                    disabled={!resolutionReason.trim() || submittingStatus || attachmentsUploading}
-                    onClick={handleResolutionSubmit}
-                  >
-                    {submittingStatus ? (
-                      <><span className="spinner-border spinner-border-sm me-2" />Saving…</>
+
+                  {/* Maker Rejection Guided Actions */}
+                  {isMaker && pendingStatusChange.newStatus === "Rejected" ? (
+                    !rejectionPolicyAdvice ? (
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm rounded-pill px-4 shadow-sm"
+                        disabled={!resolutionReason.trim() || checkingRejectionPolicy}
+                        onClick={handleCheckRejectionPolicy}
+                      >
+                        {checkingRejectionPolicy ? (
+                          <><span className="spinner-border spinner-border-sm me-2" />Checking Policy…</>
+                        ) : (
+                          <><i className="bi bi-shield-check me-1" /> Get Policy Advice First</>
+                        )}
+                      </button>
+                    ) : rejectionPolicyAdvice.verdict === "GO_AHEAD" ? (
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm rounded-pill px-4 shadow-sm"
+                        disabled={submittingStatus || attachmentsUploading}
+                        onClick={() => handleResolutionSubmit(rejectionPolicyAdvice)}
+                      >
+                        {submittingStatus ? (
+                          <><span className="spinner-border spinner-border-sm me-2" />Escalating…</>
+                        ) : (
+                          <><i className="bi bi-arrow-up-right-circle me-1" /> Escalate to Head for Rejection</>
+                        )}
+                      </button>
                     ) : (
-                      cfg.btnText
-                    )}
-                  </button>
+                      <div className="d-flex align-items-center gap-2 flex-wrap ms-auto">
+                        <button
+                          type="button"
+                          className="btn btn-outline-danger btn-sm rounded-pill px-3 py-1 fs-12"
+                          disabled={submittingStatus || attachmentsUploading}
+                          onClick={() => handleResolutionSubmit(rejectionPolicyAdvice)}
+                          title="Forward to HOD with policy warning attached"
+                        >
+                          Escalate with Warning
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-success btn-sm rounded-pill px-4 shadow-sm d-inline-flex align-items-center gap-1"
+                          disabled={submittingStatus || attachmentsUploading}
+                          onClick={handleAdoptPolicyAdvice}
+                        >
+                          {submittingStatus ? (
+                            <><span className="spinner-border spinner-border-sm me-2" />Saving…</>
+                          ) : (
+                            <><i className="bi bi-lightbulb me-1" /> Take Advice & Continue Ticket</>
+                          )}
+                        </button>
+                      </div>
+                    )
+                  ) : (
+                    <button
+                      type="button"
+                      className={`btn btn-sm rounded-pill px-4 ${cfg.tone === "danger" ? "btn-danger" : cfg.tone === "ok" ? "btn-primary btn-confirm-ok" : "btn-primary"}`}
+                      disabled={!resolutionReason.trim() || submittingStatus || attachmentsUploading}
+                      onClick={() => handleResolutionSubmit()}
+                    >
+                      {submittingStatus ? (
+                        <><span className="spinner-border spinner-border-sm me-2" />Saving…</>
+                      ) : (
+                        cfg.btnText
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
