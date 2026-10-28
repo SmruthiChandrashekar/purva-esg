@@ -33,7 +33,7 @@ const AdminLogin = () => {
       // Check role — only admins/super_admins can access admin portal
       const { data: userData, error: userError } = await supabase
         .from("users")
-        .select("role")
+        .select("role, is_active")
         .eq("user_id", authData.user.id)
         .single();
 
@@ -41,6 +41,13 @@ const AdminLogin = () => {
       if (userError || !allowedRoles.includes(userData?.role)) {
         await supabase.auth.signOut();
         setError("Access denied. This portal is for administrators only.");
+        setIsLoading(false);
+        return;
+      }
+
+      if (userData.is_active === false) {
+        await supabase.auth.signOut();
+        setError("This account has been deactivated. Contact your super admin.");
         setIsLoading(false);
         return;
       }
