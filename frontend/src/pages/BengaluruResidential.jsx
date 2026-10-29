@@ -314,19 +314,7 @@ const BengaluruResidential = () => {
                     Enquire Now
                   </button>
                 </div>
-                <div className="text-center pt-2">
-                  <button
-                    type="button"
-                    className="btn btn-link p-0 text-decoration-none text-muted"
-                    style={{ fontSize: "0.78rem" }}
-                    onClick={() => {
-                      sessionStorage.setItem("purva_selected_project", project.title);
-                      navigate(`/lodge-selection?project=${encodeURIComponent(project.title)}`);
-                    }}
-                  >
-                    <span className="text-danger me-1">&#9878;</span> File a Complaint for this Site &rarr;
-                  </button>
-                </div>
+
               </div>
             </div>
           ))}

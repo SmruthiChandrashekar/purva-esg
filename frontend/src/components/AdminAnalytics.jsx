@@ -89,11 +89,11 @@ const AdminAnalytics = ({ adminDepartment, onFilter }) => {
       {/* KPI Cards */}
       <div className="row g-3 mb-4 row-cols-2 row-cols-md-3 row-cols-xl-5">
         {[
-          { cls: "is-total", label: "Total Grievances", value: filteredCount, sub: "all records in scope", onClick: () => onFilter?.({ status: "ALL", severity: "ALL", category: "ALL", date: "ALL", sla: "ALL" }), title: "Show all grievances" },
+          { cls: "is-total", label: "Total Complaints", value: filteredCount, sub: "all records in scope", onClick: () => onFilter?.({ status: "ALL", severity: "ALL", category: "ALL", date: "ALL", sla: "ALL" }), title: "Show all complaints" },
           { cls: "is-resolution", label: "Avg Resolution Time", value: `${metrics.avg_resolution_time} hrs`, sub: "resolved tickets" },
           { cls: "is-satisfaction", label: "User Satisfaction", value: metrics.avg_satisfaction ? `${metrics.avg_satisfaction} / 5` : "N/A", sub: "average feedback rating" },
-          { cls: "is-risk", label: "High/Critical Risk", value: insights.high_severity, sub: "needs priority attention", onClick: () => onFilter?.({ severity: "HIGH_CRITICAL" }), title: "Show High and Critical grievances" },
-          { cls: "is-pending", label: "Pending Cases", value: (insights?.status_distribution?.open || 0) + (insights?.status_distribution?.investigating || 0), sub: "open + in progress", onClick: () => onFilter?.({ status: "PENDING" }), title: "Show pending and in-progress grievances" },
+          { cls: "is-risk", label: "High/Critical Risk", value: insights.high_severity, sub: "needs priority attention", onClick: () => onFilter?.({ severity: "HIGH_CRITICAL" }), title: "Show High and Critical complaints" },
+          { cls: "is-pending", label: "Pending Cases", value: (insights?.status_distribution?.open || 0) + (insights?.status_distribution?.investigating || 0), sub: "open + in progress", onClick: () => onFilter?.({ status: "PENDING" }), title: "Show pending and in-progress complaints" },
         ].map((k) => (
           <div className="col" key={k.label}>
             <div
@@ -116,7 +116,7 @@ const AdminAnalytics = ({ adminDepartment, onFilter }) => {
         <div className="col-md-8">
           <div className="card shadow-sm border-0 p-4 h-100">
             <h6 className="fw-bold mb-1">Complaint Volume Trends</h6>
-            {onFilter && <small className="text-muted mb-3 d-block">Click a point to see that day's grievances</small>}
+            {onFilter && <small className="text-muted mb-3 d-block">Click a point to see that day's complaints</small>}
             <div className="w-100 analytics-chart-lg">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart

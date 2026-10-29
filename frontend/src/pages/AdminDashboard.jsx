@@ -22,7 +22,7 @@ const DeptPieTooltip = ({ active, payload }) => {
     return (
       <div className="rounded-3 fs-13 admin-chart-tooltip">
         <div className="fw-semibold admin-chart-tooltip-name">{payload[0].name}</div>
-        <div className="admin-chart-tooltip-value">{payload[0].value} grievance{payload[0].value !== 1 ? "s" : ""}</div>
+        <div className="admin-chart-tooltip-value">{payload[0].value} complaint{payload[0].value !== 1 ? "s" : ""}</div>
       </div>
     );
   }
@@ -418,10 +418,10 @@ const AdminDashboard = () => {
     switch (status) {
       case "Resolved":
         return {
-          title: "Resolve grievance",
+          title: "Resolve complaint",
           tone: "ok",
           label: "Resolution summary",
-          placeholder: "Describe the actions taken and how the grievance was resolved…",
+          placeholder: "Describe the actions taken and how the complaint was resolved…",
           btnText: "Resolve",
           description: "This summary is saved to the audit trail and shared with the complainant.",
         };
@@ -431,16 +431,16 @@ const AdminDashboard = () => {
             title: "Propose Rejection (Maker)",
             tone: "danger",
             label: "Reason for proposed rejection",
-            placeholder: "Explain the policy grounds why this grievance should be rejected…",
+            placeholder: "Explain the policy grounds why this complaint should be rejected…",
             btnText: "Submit for HOD Cross-Check",
             description: "As an L1/L2/L3 officer (Maker), this rejection will be forwarded to the Head of Department (HOD) for cross-check and final approval.",
           };
         }
         return {
-          title: "Reject grievance",
+          title: "Reject complaint",
           tone: "danger",
           label: "Reason for rejection",
-          placeholder: "Explain why this grievance can't be accepted…",
+          placeholder: "Explain why this complaint can't be accepted…",
           btnText: "Confirm Rejection",
           description: "This reason is saved to the audit trail and shared with the complainant.",
         };
@@ -548,7 +548,7 @@ const AdminDashboard = () => {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.detail || "Failed to escalate grievance");
+        throw new Error(err.detail || "Failed to escalate complaint");
       }
       const data = await res.json();
       const updated = data.grievance;
@@ -562,7 +562,7 @@ const AdminDashboard = () => {
       setEscalationReason("");
       setEscalationNotes("");
       setEscalationAttachments([]);
-      alert(`Grievance successfully escalated to ${updated.assigned_tier}!`);
+      alert(`Complaint successfully escalated to ${updated.assigned_tier}!`);
     } catch (err) {
       alert("Failed to escalate: " + err.message);
     } finally {
@@ -594,7 +594,7 @@ const AdminDashboard = () => {
 
   // Delete grievance
   const handleDelete = async (grievanceId) => {
-    if (!window.confirm("Are you sure you want to delete this grievance? This action cannot be undone.")) {
+    if (!window.confirm("Are you sure you want to delete this complaint? This action cannot be undone.")) {
       return;
     }
 
@@ -608,7 +608,7 @@ const AdminDashboard = () => {
       
       setGrievances((prev) => prev.filter((g) => g.grievance_id !== grievanceId));
     } catch (err) {
-      alert("Failed to delete grievance: " + err.message);
+      alert("Failed to delete complaint: " + err.message);
     } finally {
       setUpdatingId(null);
     }
@@ -779,7 +779,7 @@ ${ragRecommendation.compliance_notes || ""}`;
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = downloadUrl;
-      a.download = `grievances_export.${format}`;
+      a.download = `complaints_export.${format}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -896,7 +896,7 @@ ${ragRecommendation.compliance_notes || ""}`;
                   <div>
                     <h6 className="fw-bold mb-0" style={{ color: "var(--heading-color)" }}>
                       <i className="bi bi-pie-chart-fill me-2" style={{ color: isDark ? "#e4e4e7" : "#0c7cd5" }} />
-                      Grievance Distribution by Department
+                      Complaint Distribution by Department
                     </h6>
                     <small className="text-muted" style={{ fontSize: "12px" }}>
                       {activeDept ? `Drilldown for ${selectedDept}` : "Click a slice or row to drill down and filter the table"}
@@ -1015,10 +1015,10 @@ ${ragRecommendation.compliance_notes || ""}`;
                   <div>
                     <h6 className="fw-bold mb-0" style={{ color: "var(--heading-color)" }}>
                       <i className="bi bi-card-checklist me-2" style={{ color: isDark ? "#38bdf8" : "#0284c7" }} />
-                      All Grievances Status
+                      All Complaints Status
                     </h6>
                     <small className="text-muted" style={{ fontSize: "12px" }}>
-                      Live breakdown of all system grievances by stage
+                      Live breakdown of all system complaints by stage
                     </small>
                   </div>
                   <span className="badge px-3 py-2 rounded-pill fw-bold" style={{
@@ -1443,7 +1443,7 @@ ${ragRecommendation.compliance_notes || ""}`;
             <div className="text-center py-5 text-muted">
               <h5 className="fw-bold mb-1">No complaints assigned</h5>
               <p className="mb-0 fs-14">
-                Grievances matching your <strong>{admin?.department || "assigned"}</strong> {isTierLocked ? `${admin?.admin_tier || ""} queue` : "department"} will appear here in real-time.
+                Complaints matching your <strong>{admin?.department || "assigned"}</strong> {isTierLocked ? `${admin?.admin_tier || ""} queue` : "department"} will appear here in real-time.
               </p>
             </div>
           ) : (
@@ -1633,7 +1633,7 @@ ${ragRecommendation.compliance_notes || ""}`;
                           <div>
                             <span className="fw-bold text-dark fs-14">Maker-Checker: Rejection Cross-Check Required</span>
                             <div className="fs-12 text-secondary">
-                              An L1/L2/L3 officer proposed rejecting this grievance. As Department Head (Checker), your review is required before final rejection.
+                              An L1/L2/L3 officer proposed rejecting this complaint. As Department Head (Checker), your review is required before final rejection.
                             </div>
                           </div>
                         </div>
@@ -1899,7 +1899,7 @@ ${ragRecommendation.compliance_notes || ""}`;
                       disabled={updatingId === selectedTicket.grievance_id}
                     >
                       <i className="bi bi-trash3 me-2" />
-                      Delete grievance
+                      Delete complaint
                     </button>
                     )}
                   </div>
@@ -2035,7 +2035,7 @@ ${ragRecommendation.compliance_notes || ""}`;
                     </span>
                   </div>
                   <div className="fs-14 fw-bold text-heading mb-1">
-                    {ragRecommendation.primary_policy || "Puravankara Grievance Redressal Policy"}
+                    {ragRecommendation.primary_policy || "Puravankara Complaint Redressal Policy"}
                   </div>
                   <p className="fs-13 text-theme mb-0 admin-rag-text">
                     {ragRecommendation.executive_summary}

@@ -136,7 +136,7 @@ const InsightsPanel = ({ grievances, onFilter }) => {
     <div className="mb-4">
       <div className="d-flex align-items-center mb-3">
         <h5 className="mb-0 fw-bold"><i className="bi bi-activity me-2" />Performance Insights</h5>
-        <span className="text-muted ms-3" style={{ fontSize: 12 }}>Derived from {stats.total} grievances in scope</span>
+        <span className="text-muted ms-3" style={{ fontSize: 12 }}>Derived from {stats.total} complaints in scope</span>
       </div>
 
       <div className="row g-3 mb-3 row-cols-2 row-cols-md-3 row-cols-xl-6">
@@ -159,7 +159,7 @@ const InsightsPanel = ({ grievances, onFilter }) => {
       <div className="row g-3 mb-3">
         <div className="col-lg-8">
           <div className="card shadow-sm border-0 p-4 h-100" style={card}>
-            <Title hint="Last 14 days — click a day to list those grievances">Received vs Resolved</Title>
+            <Title hint="Last 14 days — click a day to list those complaints">Received vs Resolved</Title>
             <div style={{ height: 240 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart

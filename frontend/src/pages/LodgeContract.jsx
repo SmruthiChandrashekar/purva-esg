@@ -111,10 +111,10 @@ function LodgeContract() {
           setSubmittedId("offline-queued");
         } catch (qErr) {
           console.error("Offline queue error:", qErr);
-          alert("Failed to submit grievance. Please try again.");
+          alert("Failed to submit complaint. Please try again.");
         }
       } else {
-        alert(`Failed to submit grievance: ${err.message}`);
+        alert(`Failed to submit complaint: ${err.message}`);
       }
     } finally {
        setIsSubmitting(false);

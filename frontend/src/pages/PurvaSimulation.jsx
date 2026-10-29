@@ -148,7 +148,7 @@ const PurvaSimulation = () => {
                 sessionStorage.removeItem("purva_selected_project");
                 navigate("/grm");
               }}
-              title="Return to Grievance Redressal System"
+              title="Return to Complaint Redressal System"
             >
               Go to Complaints Portal &rarr;
             </div>

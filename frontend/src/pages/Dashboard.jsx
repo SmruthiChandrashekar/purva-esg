@@ -245,7 +245,7 @@ function Dashboard() {
               </div>
             ) : grievances.length === 0 ? (
               <div className="text-center py-5 text-muted">
-                <p className="mb-0">No grievances found. Create your first complaint.</p>
+                <p className="mb-0">No complaints found. Create your first complaint.</p>
               </div>
             ) : (
               <div className="table-responsive">
@@ -405,7 +405,7 @@ function Dashboard() {
               <button type="button" className="btn-close" onClick={() => setShowFeedbackModal(false)}></button>
             </div>
             <div className="modal-body py-4">
-              <p className="text-muted mb-3">How satisfied are you with the resolution of your grievance?</p>
+              <p className="text-muted mb-3">How satisfied are you with the resolution of your complaint?</p>
               <div className="d-flex justify-content-center mb-3">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <span 

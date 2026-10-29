@@ -135,10 +135,10 @@ function LodgeExternal() {
           setSubmittedId("offline-queued");
         } catch (qErr) {
           console.error("Offline queue error:", qErr);
-          alert("Failed to submit grievance. Please try again.");
+          alert("Failed to submit complaint. Please try again.");
         }
       } else {
-        alert(`Failed to submit grievance: ${err.message}`);
+        alert(`Failed to submit complaint: ${err.message}`);
       }
     } finally {
       setIsSubmitting(false);
@@ -222,7 +222,7 @@ function LodgeExternal() {
                         )}
                       </div>
                       <p className="text-muted small mb-3">
-                        Choose your city and Puravankara project to link this grievance to the appropriate site response team.
+                        Choose your city and Puravankara project to link this complaint to the appropriate site response team.
                       </p>
 
                       <div className="row g-3">

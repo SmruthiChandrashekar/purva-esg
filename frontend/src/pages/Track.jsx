@@ -172,7 +172,7 @@ function Track() {
         color: "#880e4f",
         bg: "#fce4ec",
         border: "#f8bbd0",
-        description: "Assigned for direct executive oversight and critical grievance redressal.",
+        description: "Assigned for direct executive oversight and critical complaint redressal.",
         slaLabel: "4 Hours Target SLA"
       };
     }

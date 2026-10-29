@@ -576,7 +576,7 @@ function Profile() {
                             onChange={handleChange}
                             placeholder="e.g. Purva Silversands (Unit 402) / Purva Bliss"
                           />
-                          <span className="text-muted fs-11">Property or site related to your interaction or grievance.</span>
+                          <span className="text-muted fs-11">Property or site related to your interaction or complaint.</span>
                         </div>
 
                         <div className="col-md-6">
@@ -1009,14 +1009,14 @@ function Profile() {
             <h5 className="fw-bold mb-2 text-white">Puravankara GRM</h5>
             <p className="small mb-3 profile-cta-text">
               {isExternal 
-                ? "Manage your contact details and property associations for transparent grievance resolution." 
+                ? "Manage your contact details and property associations for transparent complaint resolution." 
                 : "Keep your contact information current for timely assignment and resolution alerts."}
             </p>
             <Link 
               to={isAdmin ? "/admin/dashboard" : "/lodge-selection"} 
               className="btn btn-light text-navy btn-sm rounded-pill px-4 fw-bold shadow-sm"
             >
-              {isAdmin ? "Go to Admin Dashboard" : "Lodge a Grievance"}
+              {isAdmin ? "Go to Admin Dashboard" : "Lodge a Complaint"}
             </Link>
           </div>
         </div>

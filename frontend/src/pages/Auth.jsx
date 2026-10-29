@@ -398,7 +398,7 @@ const Auth = () => {
       <div className="hero-banner text-white bg-navy auth-hero">
         <div className="container text-center pb-4 text-white">
           <h1 className="fw-bold mb-2 text-white auth-hero-title">
-            Stakeholder Grievance &amp; Complaints Portal
+            Stakeholder Complaints Portal
           </h1>
           <p className="opacity-90 mb-0 auth-hero-lead">
             Empowering transparency, accountability, and redressal across all communities.
@@ -531,7 +531,7 @@ const Auth = () => {
                     <div className="mb-4">
                       <h4 className="fw-bold mb-1 text-navy">Welcome back</h4>
                       <p className="text-muted small mb-0">
-                        Log in to track your existing grievances and communicate with resolution teams.
+                        Log in to track your existing complaints and communicate with resolution teams.
                       </p>
                     </div>
 
@@ -960,7 +960,7 @@ const Auth = () => {
                               value={guestData.description}
                               onChange={handleGuestInputChange}
                               className="form-control auth-input"
-                              placeholder="Please describe the grievance, location specifics, or incident details..."
+                              placeholder="Please describe the complaint, location specifics, or incident details..."
                               required
                               disabled={guestLoading}
                             />
@@ -975,10 +975,10 @@ const Auth = () => {
                             {guestLoading ? (
                               <>
                                 <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                                Submitting Grievance...
+                                Submitting...
                               </>
                             ) : (
-                              "Submit Grievance"
+                              "Submit"
                             )}
                           </button>
                         </form>
@@ -989,7 +989,7 @@ const Auth = () => {
                         <div className="auth-check-icon mx-auto mb-3" style={{ width: "48px", height: "48px", fontSize: "22px" }}>
                           <i className="bi bi-check-lg"></i>
                         </div>
-                        <h4 className="fw-bold mb-1 text-navy">Grievance Submitted</h4>
+                        <h4 className="fw-bold mb-1 text-navy">Complaint Submitted</h4>
                         <p className="text-muted small mb-4">
                           Your concern has been registered and routed to the ESG resolution team.
                         </p>
