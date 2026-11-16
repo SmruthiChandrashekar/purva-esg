@@ -1182,6 +1182,12 @@ async def submit_complaint(request: SubmitComplaintRequest, user: dict = Depends
             dept_res = classify_department_node({"user_message": clean_desc_en})
             category = dept_res.get("department", "CRM")
             severity = sev_res.get("severity", "MEDIUM").capitalize()
+            if sev_res.get("classification_failed"):
+                # The AI could not triage this (rate limit, outage, bad reply). Its LOW is
+                # only a fallback, and LOW form submissions are not stored, so file it as
+                # MEDIUM: a person reviews it instead of the complaint being lost.
+                logging.warning("Severity classification failed for a form submission; filing as Medium")
+                severity = "Medium"
 
         if SINGLE_DEPARTMENT:
             category = SINGLE_DEPARTMENT
