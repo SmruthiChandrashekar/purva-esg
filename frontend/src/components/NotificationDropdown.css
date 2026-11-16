@@ -139,3 +139,16 @@
   background: #3b82f6;
   margin-top: 6px;
 }
+
+/* Phones: the 380px panel would hang off the left edge, so pin it under the
+   navbar and let it span the screen (same slide-in animation). */
+@media (max-width: 575.98px) {
+  .notif-panel {
+    position: fixed !important;
+    top: 66px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-height: calc(100dvh - 90px);
+  }
+}

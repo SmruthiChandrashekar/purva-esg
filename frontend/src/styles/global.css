@@ -1697,10 +1697,13 @@ select.form-select {
   .pa-sidebar {
     width: 260px;
     min-width: 260px;
+    top: 62px; /* phone navbar is shorter */
   }
   .pa-flow-panel {
     width: 280px;
     min-width: 280px;
+    max-width: 85vw;
+    top: 62px;
   }
   .pa-input-area {
     padding: 12px 16px;
@@ -1815,4 +1818,44 @@ select.form-select {
 
 .tile-card:hover {
   box-shadow: var(--sh-2);
+}
+
+/* ── Responsive foundations (phones & tablets) ─────────────────────────── */
+/* Safety net: never let a stray wide element make the whole page scroll sideways.
+   `clip` (unlike `hidden`) does not create a scroll container, so sticky still works. */
+html, body {
+  overflow-x: clip;
+}
+
+@media (max-width: 991.98px) {
+  img, video, canvas {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 767.98px) {
+  /* Bootstrap's g-5 / g-4 gutters are wider than the container padding on phones */
+  .row.g-5, .row.gx-5 { --bs-gutter-x: 1.5rem; }
+  .row.g-5, .row.gy-5 { --bs-gutter-y: 2rem; }
+  .row.g-4, .row.gx-4 { --bs-gutter-x: 1.5rem; }
+
+  .modal-dialog {
+    margin: 0.75rem;
+  }
+}
+
+@media (max-width: 575.98px) {
+  /* Long IDs / emails shouldn't push layouts wider than the screen */
+  h1, h2, h3, h4, p, td {
+    overflow-wrap: anywhere;
+  }
+
+  .card {
+    padding: var(--s4);
+  }
+
+  /* Desktop-sized padding utilities eat too much of a phone screen */
+  .p-5 { padding: 1.5rem !important; }
+  .card.p-4, .card-body.p-4, .modal-body.p-4 { padding: 1.25rem !important; }
+  .px-5 { padding-left: 1rem !important; padding-right: 1rem !important; }
 }

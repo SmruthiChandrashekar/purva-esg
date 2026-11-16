@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthProvider";
@@ -10,6 +11,30 @@ function Navbar() {
   const location = useLocation();
   const { language, setLanguage, t } = useLanguage();
   const { user, userDetails, isAdmin, isSuperAdmin, logout } = useAuth();
+  // The mobile menu remembers the path it was opened on, so navigating closes it
+  const [menuOpenOn, setMenuOpenOn] = useState(null);
+  const menuOpen = menuOpenOn === location.pathname;
+  const setMenuOpen = (open) => setMenuOpenOn(open ? location.pathname : null);
+  const navRef = useRef(null);
+
+  // Close on Escape, on a tap outside the navbar, or when growing back to desktop width
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") setMenuOpen(false); };
+    const onPointer = (e) => {
+      if (navRef.current && !navRef.current.contains(e.target)) setMenuOpen(false);
+    };
+    const mq = window.matchMedia("(min-width: 1200px)");
+    const onMq = (e) => { if (e.matches) setMenuOpen(false); };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    mq.addEventListener("change", onMq);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+      mq.removeEventListener("change", onMq);
+    };
+  }, [menuOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogout = async () => {
     await logout();
@@ -22,7 +47,7 @@ function Navbar() {
   };
 
   return (
-    <nav className="navbar navbar-expand-lg shadow-sm site-navbar">
+    <nav ref={navRef} className={`navbar navbar-expand-xl shadow-sm site-navbar${menuOpen ? " is-menu-open" : ""}`}>
       <div className="container">
 
         {/* LOGO */}
@@ -32,10 +57,16 @@ function Navbar() {
         </Link>
 
         {/* NAV LINKS */}
-        <div className="ms-auto d-flex align-items-center nav-links">
+        <div className="ms-auto d-flex align-items-center nav-shell">
 
-          <Link 
-            to="/assistant" 
+          {/* On desktop this wrapper is display:contents, so its children sit inline in the bar.
+              Below 992px it becomes the slide-down menu panel. */}
+          <div id="site-nav-menu" className={`nav-menu${menuOpen ? " is-open" : ""}`}>
+          <div className="nav-menu-inner">
+          <div className="nav-menu-links">
+
+          <Link
+            to="/assistant"
             className={`me-4 text-decoration-none d-flex align-items-center gap-2 nav-assistant-link${location.pathname === "/assistant" ? " is-active" : ""}`}
           >
             {/* Purva mini avatar */}
@@ -70,22 +101,12 @@ function Navbar() {
             </Link>
           )}
 
-          <div className="d-flex align-items-center nav-utilities">
-          {/* THEME TOGGLE */}
-          <div>
-            <ThemeToggle />
           </div>
 
-          {/* NOTIFICATION BELL */}
-          {user && (
-            <div>
-              <NotificationDropdown />
-            </div>
-          )}
-
+          <div className="nav-menu-tail">
           {/* LANGUAGE DROPDOWN */}
           <select
-            className="form-select form-select-sm shadow-none cursor-pointer nav-lang-select"
+            className="form-select form-select-sm me-4 shadow-none cursor-pointer nav-lang-select"
             aria-label="Language Selection"
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
@@ -94,7 +115,6 @@ function Navbar() {
             <option value="Hindi">Hindi</option>
             <option value="Kannada">Kannada</option>
           </select>
-          </div>
 
           {/* AUTH BUTTON — Admin or User */}
           {isAdmin ? (
@@ -161,6 +181,38 @@ function Navbar() {
               {t("login")}
             </Link>
           )}
+          </div>
+          </div>
+          </div>
+
+          {/* Theme toggle and bell stay in the bar at every width */}
+          <div className="nav-quick d-flex align-items-center">
+            {/* THEME TOGGLE */}
+            <div className="me-3">
+              <ThemeToggle />
+            </div>
+
+            {/* NOTIFICATION BELL */}
+            {user && (
+              <div className="me-3">
+                <NotificationDropdown />
+              </div>
+            )}
+          </div>
+
+          {/* MOBILE MENU TOGGLE */}
+          <button
+            type="button"
+            className={`nav-toggle d-xl-none${menuOpen ? " is-open" : ""}`}
+            aria-controls="site-nav-menu"
+            aria-expanded={menuOpen}
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
 
         </div>
 

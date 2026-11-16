@@ -627,9 +627,51 @@
   }
 }
 
+@media (max-width: 1024px) {
+  .proj-topbar {
+    padding: 0 24px;
+  }
+  .proj-topbar-left .proj-nav-link,
+  .proj-dropdown-link {
+    display: none;
+  }
+}
+
 @media (max-width: 680px) {
   .proj-topbar {
     padding: 0 16px;
+    height: 64px;
+  }
+  .proj-topbar-left {
+    gap: 12px;
+  }
+  .proj-menu-btn > span:not(.proj-hamburger) {
+    display: none;
+  }
+  .proj-brand-logo {
+    font-size: 18px;
+    letter-spacing: 1px;
+  }
+  .proj-topbar-right {
+    gap: 8px;
+  }
+  /* Complaint pill collapses to its icon so the bar fits */
+  .proj-header-grm-btn {
+    padding: 0;
+    width: 34px;
+    height: 34px;
+    justify-content: center;
+    border-radius: 50%;
+  }
+  .proj-header-grm-btn > span:not(.proj-header-grm-icon) {
+    display: none;
+  }
+  .proj-icon-btn {
+    width: 34px;
+    height: 34px;
+  }
+  .proj-icon-btn[aria-label="Search"] {
+    display: none;
   }
   .proj-hero {
     padding: 0 20px 40px;

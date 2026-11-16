@@ -808,10 +808,10 @@ ${ragRecommendation.compliance_notes || ""}`;
   const closed       = filtered.filter((g) => g.status === "Closed" || g.status === "Rejected").length;
 
   return (
-    <div className="container-fluid mt-4 mb-5 px-5">
+    <div className="container-fluid mt-4 mb-5 px-3 px-md-4 px-xl-5">
 
       {/* HEADER */}
-      <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4 pb-3 border-bottom">
         <div>
           <h2 className="fw-bold mb-1 text-heading">
             {t("adminDashboard")}
@@ -1333,7 +1333,7 @@ ${ragRecommendation.compliance_notes || ""}`;
 
         {/* TIER QUEUE SELECTOR / SCOPE INDICATOR */}
         {isTierLocked ? (
-          <div className="d-flex align-items-center justify-content-between p-3 mt-3 rounded shadow-sm"
+          <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 p-3 mt-3 rounded shadow-sm"
             style={{
               backgroundColor: isDark ? "rgba(255, 255, 255, 0.04)" : "#eff6ff",
               border: isDark ? "1px solid rgba(255, 255, 255, 0.1)" : "1px solid #bfdbfe"

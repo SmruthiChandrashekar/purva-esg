@@ -117,7 +117,7 @@ const SuperAdminPortal = () => {
 
   return (
     <div className="container py-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
           <h2 className="fw-bold text-navy">Super Admin Portal</h2>
           <p className="text-muted mb-0">Manage staff access and view system audit logs.</p>

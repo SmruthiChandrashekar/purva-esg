@@ -289,7 +289,7 @@ function Profile() {
     <div className="container py-5 profile-page">
 
       {/* BREADCRUMB */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
           <nav aria-label="breadcrumb">
             <ol className="breadcrumb mb-1">
@@ -470,7 +470,7 @@ function Profile() {
           <div className="card border-0 shadow-sm rounded-4 profile-card">
             
             {/* TABS */}
-            <div className="border-bottom px-4 pt-3 d-flex gap-3">
+            <div className="border-bottom px-4 pt-3 d-flex gap-3 profile-tabs">
               <button
                 type="button"
                 className={`btn btn-sm rounded-0 pb-3 fw-bold profile-tab ${activeTab === 'info' ? "is-active" : "text-muted"}`}

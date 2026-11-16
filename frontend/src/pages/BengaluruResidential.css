@@ -599,13 +599,37 @@
   }
 }
 
+@media (max-width: 900px) {
+  .blore-topbar {
+    padding: 0 24px;
+  }
+  .blore-topbar-left .blore-nav-link,
+  .blore-dropdown-link {
+    display: none;
+  }
+}
+
 @media (max-width: 680px) {
   .blore-topbar {
     padding: 0 16px;
+    height: 64px;
   }
-  .blore-topbar-left a,
-  .blore-dropdown-link {
+  .blore-topbar-left {
+    gap: 12px;
+  }
+  .blore-menu-btn > span:not(.blore-hamburger) {
     display: none;
+  }
+  .blore-brand-logo {
+    font-size: 18px;
+    letter-spacing: 1px;
+  }
+  .blore-topbar-right {
+    gap: 8px;
+  }
+  .blore-icon-btn {
+    width: 34px;
+    height: 34px;
   }
   .blore-projects-grid {
     grid-template-columns: 1fr;

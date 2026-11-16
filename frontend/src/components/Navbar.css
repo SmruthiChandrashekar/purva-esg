@@ -88,3 +88,269 @@
 .nav-link-custom.nav-link-portal {
   color: #d32f2f !important;
 }
+
+/* ───────── Layout shell ─────────
+   Desktop (≥1200px): .nav-menu is display:contents, so links, quick actions and the
+   language/auth group sit inline in the original order.
+   Below 1200px (phones, tablets, small laptops — where the signed-in bar no longer
+   fits): .nav-menu turns into a slide-down panel under the bar and the hamburger
+   appears; theme toggle and bell stay in the bar. */
+.site-navbar {
+  position: relative;
+  z-index: 1030;
+}
+
+/* The logo keeps its size; the links give way first */
+.site-navbar .navbar-brand {
+  flex-shrink: 0;
+}
+
+.nav-menu-links,
+.nav-menu-tail {
+  display: flex;
+  align-items: center;
+}
+
+@media (min-width: 1200px) {
+  .nav-menu,
+  .nav-menu-inner { display: contents; }
+  .nav-menu-links { order: 1; }
+  .nav-quick { order: 2; }
+  .nav-menu-tail { order: 3; }
+}
+
+/* Hamburger → X */
+.nav-toggle {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text-color);
+  flex-shrink: 0;
+  transition: background-color var(--t) var(--ease), border-color var(--t) var(--ease);
+}
+
+.nav-toggle:hover,
+.nav-toggle.is-open {
+  background: var(--surface-2);
+}
+
+.nav-toggle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.nav-toggle span {
+  position: absolute;
+  left: 11px;
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transition: transform 0.3s var(--ease), opacity 0.2s var(--ease), top 0.3s var(--ease);
+}
+
+.nav-toggle span:nth-child(1) { top: 14px; }
+.nav-toggle span:nth-child(2) { top: 20px; }
+.nav-toggle span:nth-child(3) { top: 26px; }
+
+.nav-toggle.is-open span:nth-child(1) { top: 20px; transform: rotate(45deg); }
+.nav-toggle.is-open span:nth-child(2) { opacity: 0; transform: scaleX(0.4); }
+.nav-toggle.is-open span:nth-child(3) { top: 20px; transform: rotate(-45deg); }
+
+@media (max-width: 1199.98px) {
+  .site-navbar > .container {
+    flex-wrap: nowrap;
+  }
+
+  .nav-shell {
+    gap: 0;
+  }
+
+  .nav-quick > div:last-child {
+    margin-right: 10px !important;
+  }
+
+  /* Slide-down panel */
+  .nav-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    display: grid;
+    grid-template-rows: 0fr;
+    background: var(--navbar-bg);
+    border-top: 1px solid var(--line);
+    box-shadow: var(--sh-2);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px);
+    transition:
+      grid-template-rows 0.35s var(--ease),
+      opacity 0.25s var(--ease),
+      transform 0.35s var(--ease),
+      visibility 0s linear 0.35s;
+  }
+
+  .nav-menu.is-open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    transition:
+      grid-template-rows 0.35s var(--ease),
+      opacity 0.25s var(--ease),
+      transform 0.35s var(--ease),
+      visibility 0s;
+  }
+
+  /* Grid row collapses this inner wrapper to 0 height; its width tracks
+     Bootstrap's .container so the items line up with the logo above */
+  .nav-menu-inner {
+    min-height: 0;
+    overflow: hidden;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .nav-menu-links,
+  .nav-menu-tail {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}
+
+@media (min-width: 576px) and (max-width: 1199.98px) {
+  .nav-menu-inner { max-width: 540px; }
+}
+@media (min-width: 768px) and (max-width: 1199.98px) {
+  .nav-menu-inner { max-width: 720px; }
+}
+@media (min-width: 992px) and (max-width: 1199.98px) {
+  .nav-menu-inner { max-width: 960px; }
+}
+
+@media (max-width: 1199.98px) {
+
+  .nav-menu-links,
+  .nav-menu-tail {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0 16px;
+  }
+
+  .nav-menu-links { padding-top: 8px; }
+
+  .nav-menu-tail {
+    gap: 12px;
+    padding-bottom: 16px;
+  }
+
+  .nav-menu-links > a {
+    margin: 0 !important;
+    padding: 13px 4px;
+    font-size: 16px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .nav-menu-tail { padding-top: 14px; }
+
+  .nav-menu-tail > .nav-lang-select {
+    width: 100%;
+    margin: 0 !important;
+    min-height: 42px;
+  }
+
+  .nav-menu-tail > div {
+    justify-content: space-between;
+  }
+
+  .nav-menu-tail .btn {
+    flex-shrink: 0;
+  }
+
+  /* Staggered fade-in of menu items, same easing as the rest of the UI */
+  .nav-menu-links > *,
+  .nav-menu-tail > * {
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 0.25s var(--ease), transform 0.3s var(--ease);
+  }
+
+  .nav-menu.is-open .nav-menu-links > *,
+  .nav-menu.is-open .nav-menu-tail > * {
+    opacity: 1;
+    transform: none;
+  }
+
+  .nav-menu.is-open .nav-menu-links > :nth-child(1) { transition-delay: 0.04s; }
+  .nav-menu.is-open .nav-menu-links > :nth-child(2) { transition-delay: 0.08s; }
+  .nav-menu.is-open .nav-menu-links > :nth-child(3) { transition-delay: 0.12s; }
+  .nav-menu.is-open .nav-menu-links > :nth-child(4) { transition-delay: 0.16s; }
+  .nav-menu.is-open .nav-menu-links > :nth-child(5) { transition-delay: 0.2s; }
+  .nav-menu.is-open .nav-menu-links > :nth-child(6) { transition-delay: 0.24s; }
+  .nav-menu.is-open .nav-menu-tail > :nth-child(1) { transition-delay: 0.2s; }
+  .nav-menu.is-open .nav-menu-tail > :nth-child(2) { transition-delay: 0.26s; }
+}
+
+@media (max-width: 575.98px) {
+  .navbar-brand-logo {
+    height: 36px;
+    margin-right: 4px;
+  }
+
+  .brand-mark {
+    font-size: 1.2rem;
+  }
+
+  .site-navbar .navbar-brand {
+    min-width: 0;
+    margin-right: 8px;
+  }
+
+  .site-navbar .navbar-brand img {
+    max-width: 150px;
+  }
+
+  .nav-quick > div {
+    margin-right: 8px !important;
+  }
+}
+
+/* Very small phones (iPhone SE 1st gen, small Androids) */
+@media (max-width: 374.98px) {
+  .navbar-brand-logo {
+    height: 28px;
+  }
+  .brand-mark {
+    font-size: 0.95rem;
+  }
+  .nav-quick > div,
+  .nav-quick > div:last-child {
+    margin-right: 4px !important;
+  }
+  .nav-toggle {
+    width: 38px;
+    height: 38px;
+  }
+  .nav-toggle span {
+    left: 9px;
+  }
+  .nav-toggle span:nth-child(1) { top: 12px; }
+  .nav-toggle span:nth-child(2),
+  .nav-toggle.is-open span:nth-child(1),
+  .nav-toggle.is-open span:nth-child(3) { top: 18px; }
+  .nav-toggle span:nth-child(3) { top: 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-menu,
+  .nav-menu.is-open,
+  .nav-menu-links > *,
+  .nav-menu-tail > *,
+  .nav-toggle span {
+    transition: none !important;
+  }
+}

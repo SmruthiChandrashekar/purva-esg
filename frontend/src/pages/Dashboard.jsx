@@ -171,14 +171,14 @@ function Dashboard() {
     <div className="container mt-4 mb-5">
       
       {/* HEADER SECTION */}
-      <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4 pb-3 border-bottom">
         <div>
           <h2 className="fw-bold mb-1 text-theme">{t("dashboardTitle")}</h2>
           <p className="text-muted mb-0">
             {t("welcomeBack")} <span className="fw-bold text-dark">{userDetails?.name || "User"}</span>. {t("dashboardOverview")}
           </p>
         </div>
-        <div className="d-flex align-items-center gap-2">
+        <div className="d-flex align-items-center gap-2 flex-shrink-0">
           <button 
             className="btn btn-outline-primary px-3 shadow-sm rounded-pill fw-semibold dash-outline-btn"
             onClick={() => navigate("/profile")}

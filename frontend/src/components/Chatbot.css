@@ -387,3 +387,30 @@
   color: #856404;
   font-size: 15px;
 }
+
+/* ── Phones: chat window spans the width and sits above the launcher ── */
+@media (max-width: 576px) {
+  .chatbot-btn {
+    right: 16px;
+    bottom: 16px;
+  }
+  .chat-window {
+    left: 12px;
+    right: 12px;
+    bottom: 88px;
+    width: auto;
+    height: calc(100dvh - 160px);
+    max-height: none;
+  }
+  .chat-hint {
+    right: 16px;
+    bottom: 84px;
+  }
+  /* History drawer shouldn't cover the whole narrow window */
+  .chat-sidebar {
+    width: 80%;
+  }
+  .chat-main.shifted {
+    transform: translateX(80%);
+  }
+}

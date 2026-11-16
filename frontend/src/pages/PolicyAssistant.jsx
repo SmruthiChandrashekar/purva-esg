@@ -33,7 +33,8 @@ function PolicyAssistant() {
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // History sidebar starts open on desktop; on tablets/phones it overlays the chat, so start closed
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 992);
 
   // Voice state
   const [listening, setListening] = useState(false);
