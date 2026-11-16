@@ -29,6 +29,7 @@ on an existing database (`IF NOT EXISTS` / `DROP ... IF EXISTS`).
 | 19 | `017_phone_verification.sql` | Phone verification columns |
 | 20 | `018_projects_table.sql` | `projects` catalogue (project picker on the external form) |
 | 21 | `019_fix_audit_logs.sql` | Audit log fixes |
+| 22 | `021_lock_open_policies.sql` | Closes open policies on `notifications`, `grievance_states` and attachment uploads |
 
 There is no `020` in this app: `020_resolution_sla.sql` belongs to the all-departments app (`purva-main`).
 
@@ -47,6 +48,10 @@ ALTER TABLE public.feedback      ENABLE ROW LEVEL SECURITY;
 
 (This is already applied on the current project; it is needed on a new one.)
 
+After `021_lock_open_policies.sql`, `notifications` and `grievance_states` also have no
+policies (backend only). Attachment **uploads** need a login; attachments can still be
+**opened** by anyone who has a file's link, because the site uses public links.
+
 Check the result at any time (read-only):
 
 ```sql
@@ -58,7 +63,9 @@ where n.nspname = 'public' and c.relkind = 'r'
 order by 1;
 ```
 
-Every table should show `rls_on = true`.
+Every table should show `rls_on = true`. Tables that only the backend uses
+(`audit_logs`, `chat_sessions`, `chat_messages`, `feedback`, `notifications`,
+`grievance_states`) should show 0 policies.
 
 ## Sharing one Supabase project with the all-departments app
 
