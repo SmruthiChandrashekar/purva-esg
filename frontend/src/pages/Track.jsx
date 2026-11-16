@@ -61,7 +61,6 @@ function Track() {
           sla_hours: data.sla_hours,
           sla_deadline: data.sla_deadline,
           initial_handler: data.initial_handler,
-          assigned_to: data.assigned_to,
           resolution_reason: data.resolution_reason,
           report_url: data.report_url,
           documents: data.documents || [],

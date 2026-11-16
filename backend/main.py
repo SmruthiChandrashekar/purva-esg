@@ -685,7 +685,9 @@ async def track_grievance(tracking_id: str):
                         docs.append({"name": a.get("name") or "Document", "url": url})
         keys = ["grievance_id", "category", "severity", "status", "department", "description",
                 "assigned_tier", "assigned_queue", "sla_hours", "sla_deadline", "initial_handler",
-                "assigned_to", "resolution_reason", "report_url", "created_at"]
+                "resolution_reason", "report_url", "created_at"]
+        # assigned_to (the handling staff member's user id) is left out on purpose: this
+        # endpoint needs no login, and staff ids must not be handed to the public.
         out = {k: g.get(k) for k in keys}
         out["documents"] = docs
         return out
@@ -1323,24 +1325,9 @@ async def submit_complaint(request: SubmitComplaintRequest, user: dict = Depends
 
 
 # 📋 ADMIN DASHBOARD — Get assigned grievances
-@app.get("/api/admin/grievances")
-def get_admin_grievances(admin_id: str):
-    try:
-        # Verify the user is an admin
-        admin_check = supabase.table("users").select("role").eq("user_id", admin_id).single().execute()
-        if not admin_check.data or admin_check.data["role"] != "admin":
-            raise HTTPException(status_code=403, detail="Access denied. Admins only.")
-
-        # Fetch only grievances assigned to this admin
-        result = supabase.table("grievances").select("*").eq("assigned_to", admin_id).order("created_at", desc=True).execute()
-
-        return {"grievances": result.data or []}
-
-    except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=500, detail=str(e))
-
+# (Removed GET /api/admin/grievances?admin_id=...: it had no login check and returned an
+# admin's assigned complaints to anyone who knew that admin's id. The dashboard uses
+# /api/admin/complaints, which requires an admin login.)
 
 # 🔄 ADMIN STATUS UPDATE
 @app.patch("/api/admin/update-status")
