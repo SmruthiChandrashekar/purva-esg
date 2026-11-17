@@ -104,6 +104,11 @@ function Navbar() {
           </div>
 
           <div className="nav-menu-tail">
+          {/* Phones: the theme switch moves here so the bar has room */}
+          <div className="nav-theme-in-menu">
+            <span>Dark mode</span>
+            <ThemeToggle />
+          </div>
           {/* LANGUAGE DROPDOWN */}
           <select
             className="form-select form-select-sm me-4 shadow-none cursor-pointer nav-lang-select"
@@ -189,8 +194,8 @@ function Navbar() {
           <div className="nav-quick d-flex align-items-center">
             {/* FILE A COMPLAINT: always in the bar so first-time visitors find it */}
             {!isAdmin && !location.pathname.startsWith("/lodge") && (
-              <div className="me-3">
-                <Link to="/lodge-selection" className="btn btn-danger btn-sm fw-semibold nav-file-btn">
+              <div>
+                <Link to="/lodge-selection" className="btn btn-danger btn-sm fw-semibold nav-file-btn" aria-label="File a complaint">
                   <i className="bi bi-pencil-square" aria-hidden="true"></i>
                   <span className="nav-file-label-full">File a complaint</span>
                   <span className="nav-file-label-short">File</span>
@@ -198,14 +203,14 @@ function Navbar() {
               </div>
             )}
 
-            {/* THEME TOGGLE */}
-            <div className="me-3">
+            {/* THEME TOGGLE (in the menu instead on phones) */}
+            <div className="nav-theme-in-bar">
               <ThemeToggle />
             </div>
 
             {/* NOTIFICATION BELL */}
             {user && (
-              <div className="me-3">
+              <div>
                 <NotificationDropdown />
               </div>
             )}

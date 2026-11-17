@@ -309,7 +309,7 @@ const Auth = () => {
           <div className="row g-4 g-lg-5 justify-content-center align-items-start">
 
             {/* LEFT: FEATURE HIGHLIGHTS */}
-            <div className="col-lg-5 col-12 auth-side">
+            <div className="col-lg-5 col-12 auth-side order-2 order-lg-1">
               <h4 className="fw-bold mb-4 text-theme">
                 {t("whyUseGRM")}
               </h4>
@@ -354,7 +354,7 @@ const Auth = () => {
             </div>
 
             {/* RIGHT: THE ACTION FORM CONTAINER */}
-            <div className="col-lg-7 col-md-10 col-12 auth-side">
+            <div className="col-lg-7 col-md-10 col-12 auth-side order-1 order-lg-2">
               <div className="card border-0 shadow-sm auth-card p-4 p-md-5">
 
                 {/* TOP TABS: [ Log In ] | [ Register ] | [ Continue as Guest ] */}

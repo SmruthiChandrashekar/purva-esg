@@ -1,0 +1,423 @@
+/* ==========================================================================
+   Responsive foundation. Loaded after every other stylesheet, so these rules
+   win. One set of rules for every screen: small phones (from 280px, e.g. a
+   foldable's cover screen), regular phones, unfolded foldables (~600-900px),
+   tablets and desktops.
+   ========================================================================== */
+
+:root {
+  --nav-h: 64px;          /* one navbar height everywhere (56px on phones) */
+  --gutter: 16px;         /* page side margin */
+  --tap: 44px;            /* smallest comfortable touch target */
+  /* Bootstrap turns on smooth scrolling for the whole page; it made page changes and
+     focusing fields "slide" around on phones. Scroll jumps are instant now. */
+  scroll-behavior: auto;
+}
+
+@media (min-width: 768px) {
+  :root { --gutter: 24px; }
+}
+
+@media (max-width: 575.98px) {
+  :root { --nav-h: 56px; }
+}
+
+/* ── Page frame ─────────────────────────────────────────────────────────── */
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Nothing can push the page sideways */
+body {
+  overflow-x: clip;
+}
+
+/* The app fills the screen and the footer sits at the bottom, so short pages have no
+   gap above it. dvh follows the real visible height on phones (address bar, foldables). */
+#root,
+.app-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell { flex: 1 0 auto; }
+
+.app-main {
+  flex: 1 0 auto;
+  width: 100%;
+}
+
+/* Pages used their own tall minimum heights to push the footer down; not needed now */
+.lodge-select-page,
+.profile-page,
+.stakeholder-hub,
+.track-page {
+  min-height: 0 !important;
+}
+
+/* The Policy Assistant fills exactly the space under the navbar */
+.app-shell.is-assistant {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+}
+
+.app-shell.is-assistant .app-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell.is-assistant .pa-container {
+  height: auto !important;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Same side margins everywhere, kept clear of notches and curved edges */
+.container,
+.container-fluid {
+  padding-left: max(var(--gutter), env(safe-area-inset-left));
+  padding-right: max(var(--gutter), env(safe-area-inset-right));
+}
+
+/* ── Navbar ─────────────────────────────────────────────────────────────── */
+
+.site-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  min-height: var(--nav-h);
+  padding-top: 0;
+  padding-bottom: 0;
+  box-shadow: 0 1px 0 var(--line), 0 2px 8px rgba(20, 40, 65, .04) !important;
+}
+
+.site-navbar > .container {
+  min-height: var(--nav-h);
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.site-navbar .navbar-brand {
+  padding: 0;
+  margin-right: 8px;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.site-navbar .navbar-brand-logo {
+  height: 40px;
+  width: auto;
+  max-width: 170px;
+  margin-right: 4px;
+}
+
+.site-navbar .brand-mark {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.nav-shell {
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.nav-quick {
+  gap: 8px;
+}
+
+/* Space between the quick buttons and the menu button on collapsed widths */
+@media (max-width: 1199.98px) {
+  .nav-shell { gap: 8px !important; }
+}
+
+.nav-quick > div {
+  margin-right: 0 !important;
+}
+
+.nav-toggle {
+  width: var(--tap);
+  height: var(--tap);
+}
+
+/* Theme switch: small to look at, full-size to tap */
+.theme-switch {
+  position: relative;
+}
+
+.theme-switch::after {
+  content: "";
+  position: absolute;
+  inset: -10px -2px;
+}
+
+.btn.nav-file-btn,
+.notif-bell {
+  min-height: 40px;
+  min-width: 40px;
+}
+
+/* The theme switch lives in the menu on phones (only shown there); in the bar elsewhere */
+.nav-theme-in-menu { display: none; }
+
+@media (max-width: 575.98px) {
+  .nav-theme-in-bar { display: none !important; }
+  .nav-theme-in-menu {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 6px 0;
+    font-weight: 600;
+  }
+  .site-navbar .navbar-brand-logo { height: 30px; max-width: 120px; }
+  .site-navbar .brand-mark { font-size: 1.05rem; }
+  .nav-quick { gap: 6px; }
+}
+
+/* Very narrow screens (a foldable's cover screen, small Androids): File shows as an icon */
+@media (max-width: 339.98px) {
+  .site-navbar .navbar-brand-logo { max-width: 92px; }
+  .nav-file-btn { padding: 0 !important; width: 40px; }
+  .nav-file-btn .nav-file-label-short { display: none !important; }
+}
+
+/* Policy Assistant: close button of the chat-history panel */
+.pa-sidebar-close {
+  min-width: 40px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  min-height: var(--tap);
+  line-height: 1.2;
+  text-align: center;
+}
+
+/* A <label> styled as a button (e.g. "Browse Files") behaves like one, not like a
+   full-width form label with its text stuck at the top */
+label.btn {
+  display: inline-flex !important;
+  width: auto;
+}
+
+.btn-sm { min-height: 36px; }
+.btn-lg { min-height: 52px; }
+
+/* Text-style buttons shouldn't grow into big boxes */
+.btn-link { min-height: 0; }
+
+/* ── Forms ──────────────────────────────────────────────────────────────── */
+
+.form-control,
+.form-select {
+  min-height: var(--tap);
+}
+
+.form-control-sm,
+.form-select-sm {
+  min-height: 36px;
+}
+
+textarea.form-control {
+  min-height: 104px;
+}
+
+.form-check-input {
+  width: 1.15em;
+  height: 1.15em;
+  margin-top: .2em;
+}
+
+/* The custom ".inp" fields (home page tracker etc.) match the Bootstrap ones */
+.inp {
+  min-height: var(--tap);
+  padding: 0 14px;
+  min-width: 0;
+  width: 100%;
+}
+
+/* A field next to its button takes the free space; the button keeps its size */
+.d-flex > .inp,
+.d-flex > .form-control {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.d-flex > .inp + .btn,
+.d-flex > .form-control + .btn {
+  flex: 0 0 auto;
+}
+
+/* An input next to a button shares the row instead of overflowing it */
+.input-group > .form-control,
+.input-group > .form-select {
+  min-width: 0;
+}
+
+/* iPhones zoom into any field with text under 16px and the whole page shifts.
+   16px on phones and tablets prevents that. */
+@media (max-width: 991.98px) {
+  input.form-control,
+  textarea.form-control,
+  .inp,
+  select.form-select,
+  .form-control,
+  .form-select {
+    font-size: 16px !important;
+  }
+}
+
+/* ── Cards and spacing on phones ───────────────────────────────────────── */
+
+@media (max-width: 575.98px) {
+  .card.p-5,
+  .card.p-4 {
+    padding: 20px !important;
+  }
+
+  .card-body { padding: 16px; }
+
+  /* Bootstrap's big top/bottom margins eat a small screen */
+  .mt-5 { margin-top: 1.5rem !important; }
+  .mb-5 { margin-bottom: 1.5rem !important; }
+  .py-5 { padding-top: 2rem !important; padding-bottom: 2rem !important; }
+
+  /* Main actions in a hero span the full width, one per row, all the same size */
+  .home-lodge-btn,
+  .home-track-btn {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  h1, .h1 { line-height: 1.12; }
+
+  /* Big hero headline scales with the screen instead of wrapping word by word */
+  .home-hero-title,
+  .hero-title {
+    font-size: clamp(30px, 10.5vw, 44px) !important;
+  }
+  h2, .h2 { line-height: 1.18; }
+}
+
+/* ── Profile page ───────────────────────────────────────────────────────── */
+
+/* Tabs scroll sideways instead of being cut off */
+.profile-tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.profile-tabs::-webkit-scrollbar { display: none; }
+.profile-tab {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 575.98px) {
+  /* Avatar above the name: side by side, the name landed on the dark cover and the
+     email broke mid-word */
+  .profile-header-body .d-flex.align-items-end.gap-3 {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+  .profile-header-body p,
+  .profile-header-body h3 {
+    overflow-wrap: anywhere;
+  }
+  .profile-avatar {
+    width: 92px;
+    height: 92px;
+  }
+}
+
+/* ── Tables: scroll sideways inside their card, never the whole page ────── */
+
+.table-responsive,
+.card:has(> .table),
+.card-body:has(> .table) {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+
+.site-footer {
+  padding-bottom: max(var(--s5), env(safe-area-inset-bottom));
+}
+
+@media (max-width: 767.98px) {
+  .site-footer {
+    padding-top: 32px;
+    /* Room for the floating chat button so it never covers the last links */
+    padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+  .site-footer .footer-desc { margin-left: auto; margin-right: auto; }
+  .site-footer .row { --bs-gutter-y: 1rem; }
+  .site-footer .mb-3 { margin-bottom: .5rem !important; }
+}
+
+/* ── Floating chat button ───────────────────────────────────────────────── */
+
+.chatbot-btn {
+  right: max(16px, env(safe-area-inset-right)) !important;
+  bottom: max(16px, env(safe-area-inset-bottom)) !important;
+}
+
+/* The "Need help?" bubble covered content on phones and tablets */
+@media (max-width: 991.98px) {
+  .chat-hint { display: none !important; }
+}
+
+@media (max-width: 576px) {
+  .chatbot-btn {
+    width: 52px !important;
+    height: 52px !important;
+  }
+  .chat-window {
+    bottom: calc(80px + env(safe-area-inset-bottom)) !important;
+    height: calc(100dvh - var(--nav-h) - 104px) !important;
+  }
+}
+
+/* ── Dark theme: outline buttons stay readable ───────────────────────────── */
+
+[data-theme="dark"] .btn-outline-primary {
+  color: #c9d8ee;
+  border-color: #5d7ba3;
+}
+
+[data-theme="dark"] .btn-outline-primary:hover,
+[data-theme="dark"] .btn-outline-primary:focus-visible {
+  color: #ffffff;
+  background-color: #2c4f7c;
+  border-color: #2c4f7c;
+}
+
+/* ── Motion ─────────────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

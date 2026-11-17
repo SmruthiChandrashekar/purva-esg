@@ -3,6 +3,8 @@ import ReactDOM from "react-dom/client";
 import "./i18n"; // Initialize enterprise i18next
 import "./styles/global.css";
 import App from "./App";
+// Loaded after App (and the CSS its components import) so the responsive rules win
+import "./styles/responsive.css";
 import "./styles/apple.css"; // after App so it layers over component CSS
 import { ThemeProvider } from "./context/ThemeContext";
 import { initMotion } from "./utils/motion";

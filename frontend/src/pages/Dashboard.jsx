@@ -198,26 +198,26 @@ function Dashboard() {
       </div>
 
       {/* STATS OVERVIEW */}
-      <div className="row g-4 mb-5">
-        <div className="col-md-3">
+      <div className="row g-3 g-md-4 mb-5">
+        <div className="col-6 col-md-3">
           <div className="card bg-light border-0 shadow-sm p-4 h-100 dash-stat-card is-total">
             <p className="text-muted mb-1 fw-bold text-uppercase fs-12 ls-1">{t("totalGrievances")}</p>
             <h3 className="fw-bold mb-0"><CountUp value={totalGrievances} /></h3>
           </div>
         </div>
-        <div className="col-md-3">
+        <div className="col-6 col-md-3">
           <div className="card bg-light border-0 shadow-sm p-4 h-100 dash-stat-card is-progress">
             <p className="text-muted mb-1 fw-bold text-uppercase fs-12 ls-1">{t("inProgress")}</p>
             <h3 className="fw-bold mb-0 text-warning"><CountUp value={inProgress} /></h3>
           </div>
         </div>
-        <div className="col-md-3">
+        <div className="col-6 col-md-3">
           <div className="card bg-light border-0 shadow-sm p-4 h-100 dash-stat-card is-resolved">
             <p className="text-muted mb-1 fw-bold text-uppercase fs-12 ls-1">{t("resolved")}</p>
             <h3 className="fw-bold mb-0 text-success"><CountUp value={resolved} /></h3>
           </div>
         </div>
-        <div className="col-md-3">
+        <div className="col-6 col-md-3">
           <div className="card bg-light border-0 shadow-sm p-4 h-100 dash-stat-card is-rejected">
             <p className="text-muted mb-1 fw-bold text-uppercase fs-12 ls-1">{t("rejected")}</p>
             <h3 className="fw-bold mb-0 text-danger"><CountUp value={rejected} /></h3>
