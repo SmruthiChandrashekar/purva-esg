@@ -1175,6 +1175,9 @@ async def submit_complaint(request: SubmitComplaintRequest, user: dict = Depends
         description_original = request.description.strip()
         user_lang = request.lang  # e.g. "hi", "kn", "en"
         meta = request.metadata
+        # The complaint belongs to whoever is logged in. metadata.user_id comes from the browser
+        # and could name someone else, so it is ignored. Guests (no login) have no owner.
+        owner_id = (user or {}).get("user_id")
 
         # 🔹 STEP 1: Normalize description to English for ML models
         # If user wrote in Hindi/Kannada, translate first so models work correctly
@@ -1287,7 +1290,7 @@ async def submit_complaint(request: SubmitComplaintRequest, user: dict = Depends
 
         # Store clean, emoji-free description
         grievance_data = {
-            "user_id": meta.user_id if meta else None,
+            "user_id": owner_id,
             "category": category,
             "description": clean_desc_en,
             "severity": severity,
@@ -1328,7 +1331,7 @@ async def submit_complaint(request: SubmitComplaintRequest, user: dict = Depends
             )
 
         # 🔹 STEP 7: IN-APP NOTIFICATIONS
-        user_id = meta.user_id if meta else None
+        user_id = owner_id
         if user_id:
             notify_user_grievance_received(user_id, new_grievance_id)
             if route_info["assigned_tier"]:
@@ -1372,7 +1375,12 @@ async def submit_complaint(request: SubmitComplaintRequest, user: dict = Depends
 # per hour. A low-priority concern first gets the policy answer; "File it anyway" for that
 # same concern is allowed within the hour. Kept in memory: a backend restart clears it.
 GUEST_WINDOW_SECONDS = 3600
-_guest_activity: dict[str, dict] = {}   # ip -> {"at": started, "filed": bool, "low_pending": bool}
+_guest_activity: dict[str, dict] = {}   # ip -> {"at", "filed", "low_pending", "text"}
+
+
+def _same_text(a: str | None, b: str | None) -> bool:
+    norm = lambda t: " ".join((t or "").lower().split())
+    return norm(a) == norm(b)
 
 
 class GuestComplaintRequest(BaseModel):
@@ -1388,9 +1396,10 @@ class GuestComplaintRequest(BaseModel):
 
 
 def _guest_ip(request: Request) -> str:
-    # Render sits behind Cloudflare, which puts the visitor's address in these headers.
-    # X-Forwarded-For can be set by the visitor, so it is only a fallback.
-    for header in ("true-client-ip", "cf-connecting-ip"):
+    # Render sits behind Cloudflare. CF-Connecting-IP is always (re)written by Cloudflare,
+    # so a visitor can't fake it; True-Client-IP and X-Forwarded-For can pass through from
+    # the visitor, so they are only fallbacks (otherwise changing a header would reset the limit).
+    for header in ("cf-connecting-ip", "true-client-ip"):
         value = (request.headers.get(header) or "").strip()
         if value:
             return value
@@ -1413,7 +1422,10 @@ async def guest_complaint(body: GuestComplaintRequest, http_request: Request):
         _guest_activity.pop(key, None)
     entry = _guest_activity.get(ip)
     if entry:
-        follow_up = body.file_anyway and entry.get("low_pending") and not entry.get("filed")
+        # "File it anyway" must be for the same concern they were just answered about,
+        # otherwise the follow-up would be a free second complaint within the hour
+        follow_up = (body.file_anyway and entry.get("low_pending") and not entry.get("filed")
+                     and _same_text(entry.get("text"), body.description))
         if not follow_up:
             seconds_left = GUEST_WINDOW_SECONDS - (now - entry["at"])
             raise HTTPException(
@@ -1459,7 +1471,7 @@ async def guest_complaint(body: GuestComplaintRequest, http_request: Request):
     if result.get("grievance_id"):
         entry.update(filed=True, low_pending=False)
     elif result.get("redirect") == "assistant":
-        entry["low_pending"] = True
+        entry.update(low_pending=True, text=body.description)
     return result
 
 

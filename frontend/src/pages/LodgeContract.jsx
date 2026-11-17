@@ -10,6 +10,8 @@ import ProjectPicker from "../components/ProjectPicker";
 import LowPriorityAnswer from "../components/LowPriorityAnswer";
 import { initialProject } from "../utils/projectSelection";
 import "./Lodge.css";
+import { todayLocalISO } from "../utils/dates";
+import { apiErrorMessage } from "../utils/apiError";
 
 function LodgeContract() {
   const navigate = useNavigate();
@@ -65,7 +67,7 @@ function LodgeContract() {
         body: JSON.stringify({ ...lowAnswer.payload, file_anyway: true }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((typeof body.detail === "string" ? body.detail : `Server error (${res.status})`));
+      if (!res.ok) throw new Error(apiErrorMessage(body, res.status));
       setLowAnswer(null);
       setSubmittedId(body.grievance_id || body.id);
     } catch (err) {
@@ -118,7 +120,7 @@ function LodgeContract() {
       
       if (!submitRes.ok) {
         const body = await submitRes.json().catch(() => ({}));
-        throw new Error(body.detail || `Server error (${submitRes.status})`);
+        throw new Error(apiErrorMessage(body, submitRes.status));
       }
       
       const data = await submitRes.json();
@@ -231,7 +233,7 @@ function LodgeContract() {
 
                   <div className="mb-3">
                     <label className="fw-semibold mb-1">{t("incidentDate")}</label>
-                    <input type="date" name="incidentDate" value={formData.incidentDate} onChange={handleChange} className="form-control" required />
+                    <input type="date" name="incidentDate" value={formData.incidentDate} onChange={handleChange} className="form-control" max={todayLocalISO()} required />
                   </div>
 
                   <div className="mb-3">

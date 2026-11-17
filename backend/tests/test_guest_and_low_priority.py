@@ -194,3 +194,23 @@ def test_guest_cannot_set_severity(app):
     c.post("/api/guest/complaint", json={**GUEST, "severity": "High", "prefilled_severity": "High"},
            headers=VISITOR)
     assert fake.inserted()[0]["severity"] == "Medium"
+
+
+def test_guest_file_anyway_must_be_the_same_concern(app):
+    c, fake, mp = app
+    _severity(mp, "LOW")
+    c.post("/api/guest/complaint", json=GUEST, headers=VISITOR)
+    r = c.post("/api/guest/complaint", json={**GUEST, "description": "A completely different complaint text",
+                                             "file_anyway": True}, headers=VISITOR)
+    assert r.status_code == 429
+    assert not fake.inserted()
+
+
+def test_guest_limit_uses_cloudflare_ip_over_spoofable_headers(app):
+    c, fake, mp = app
+    _severity(mp, "MEDIUM")
+    first = {"CF-Connecting-IP": "203.0.113.50", "True-Client-IP": "1.1.1.1"}
+    assert c.post("/api/guest/complaint", json=GUEST, headers=first).status_code == 200
+    # Same Cloudflare address, but the visitor changed the headers they control
+    spoofed = {"CF-Connecting-IP": "203.0.113.50", "True-Client-IP": "2.2.2.2", "X-Forwarded-For": "3.3.3.3"}
+    assert c.post("/api/guest/complaint", json=GUEST, headers=spoofed).status_code == 429
