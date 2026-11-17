@@ -5,6 +5,13 @@ import "./styles/global.css";
 import App from "./App";
 // Loaded after App (and the CSS its components import) so the responsive rules win
 import "./styles/responsive.css";
+import { reloadOnceForNewVersion } from "./utils/newVersionReload";
+
+// A tab opened before a new deploy asks for code files that no longer exist:
+// reload once to pick up the new version instead of showing an error.
+window.addEventListener("vite:preloadError", (event) => {
+  if (reloadOnceForNewVersion()) event.preventDefault();
+});
 import "./styles/apple.css"; // after App so it layers over component CSS
 import { ThemeProvider } from "./context/ThemeContext";
 import { initMotion } from "./utils/motion";

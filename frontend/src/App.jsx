@@ -1,23 +1,33 @@
 import React from "react";
 import AppRoutes from "./routes/AppRoutes";
 import OfflineBanner from "./components/OfflineBanner";
+import { isNewVersionError, reloadOnceForNewVersion } from "./utils/newVersionReload";
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null, errorInfo: null };
+    this.state = { hasError: false, error: null, errorInfo: null, updating: false };
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+    return { hasError: true, error, updating: isNewVersionError(error) };
   }
 
   componentDidCatch(error, errorInfo) {
     console.error("Global Error Caught:", error, errorInfo);
-    this.setState({ errorInfo });
+    // Old tab after a new deploy: reload once to get the new version
+    if (isNewVersionError(error) && reloadOnceForNewVersion()) return;
+    this.setState({ errorInfo, updating: false });
   }
 
   render() {
+    if (this.state.hasError && this.state.updating) {
+      return (
+        <div role="status" style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px", fontFamily: "sans-serif", color: "#142841", textAlign: "center" }}>
+          Updating to the latest version…
+        </div>
+      );
+    }
     if (this.state.hasError) {
       return (
         <div style={{ padding: "40px", fontFamily: "sans-serif", maxWidth: "800px", margin: "40px auto", backgroundColor: "#fff", border: "1px solid #fee2e2", borderRadius: "12px", boxShadow: "0 4px 20px rgba(0,0,0,0.1)" }}>
