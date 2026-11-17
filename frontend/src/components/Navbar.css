@@ -354,3 +354,35 @@
     transition: none !important;
   }
 }
+
+/* "File a complaint" button in the bar (short label on phones) */
+.nav-file-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  white-space: nowrap;
+}
+.nav-file-label-short { display: none; }
+
+@media (max-width: 575.98px) {
+  .nav-file-btn { padding: 0.3rem 0.7rem; }
+  .nav-file-label-full { display: none; }
+  .nav-file-label-short { display: inline; }
+}
+
+/* Narrow phones: make room for the File button without pushing the menu button off-screen */
+@media (max-width: 420px) {
+  .site-navbar .navbar-brand { margin-right: 6px; }
+  .site-navbar .navbar-brand img { max-width: 112px; }
+  .site-navbar .brand-mark { font-size: 1rem; }
+  .nav-file-btn { padding: 0.28rem 0.6rem; gap: 4px; font-size: 0.8rem; }
+  .nav-quick > div { margin-right: 6px !important; }
+}
+
+@media (max-width: 359.98px) {
+  .site-navbar .navbar-brand img { max-width: 92px; }
+  .site-navbar .brand-mark { font-size: 0.85rem; }
+  .nav-file-btn { padding: 0.25rem 0.5rem; }
+}

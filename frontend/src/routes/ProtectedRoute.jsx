@@ -9,7 +9,10 @@ const ProtectedRoute = ({ children, allowGuest = false }) => {
   if (loading) return <div>Loading...</div>;
 
   if (!user && !(allowGuest && isGuest)) {
-    return <Navigate to={`/login${location.search}`} replace />;
+    // Keep the query string (e.g. ?project=...) and remember the page, so login brings them back
+    const params = new URLSearchParams(location.search);
+    params.set("next", location.pathname + location.search);
+    return <Navigate to={`/login?${params}`} replace />;
   }
 
   return children;

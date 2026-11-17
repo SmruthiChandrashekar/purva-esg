@@ -1,11 +1,12 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { LanguageProvider } from "../context/LanguageContext";
 import { AuthProvider, useAuth } from "../context/AuthProvider";
 import Layout from "../layout/Layout";
 import ProtectedRoute from "./ProtectedRoute";
 import PostLoginLanding from "./PostLoginLanding";
 import { SINGLE_DEPARTMENT_MODE } from "../config/features";
+import { nextFromLocation } from "../utils/returnTo";
 
 const Index = lazy(() => import("../pages/Index"));
 const Track = lazy(() => import("../pages/Track"));
@@ -22,15 +23,19 @@ const SuperAdminPortal = lazy(() => import("../pages/SuperAdminPortal"));
 const SetPassword = lazy(() => import("../pages/SetPassword"));
 const PolicyAssistant = lazy(() => import("../pages/PolicyAssistant"));
 const Profile = lazy(() => import("../pages/Profile"));
-const PurvaSimulation = lazy(() => import("../pages/PurvaSimulation"));
-const BengaluruResidential = lazy(() => import("../pages/BengaluruResidential"));
 const StakeholderHub = lazy(() => import("../pages/StakeholderHub"));
-const ProjectDetail = lazy(() => import("../pages/ProjectDetail"));
 
 // Redirect that keeps the query string (e.g. ?project=...) from the project pages.
 const RedirectKeepSearch = ({ to }) => {
   const { search } = useLocation();
   return <Navigate to={`${to}${search}`} replace />;
+};
+
+// Old links to the retired Puravankara website simulation: a project page now opens the
+// complaint flow with that project pre-selected; every other simulation page goes home.
+const OldProjectPage = () => {
+  const { projectId } = useParams();
+  return <Navigate to={`/lodge-selection?project=${encodeURIComponent(projectId || "")}`} replace />;
 };
 
 const PageLoader = () => (
@@ -62,7 +67,8 @@ const MainRoutes = () => {
     <Layout>
       <Suspense fallback={<PageLoader />}>
       <Routes>
-        <Route path="/" element={<PurvaSimulation />} />
+        {/* The portal is the front door (the QR code points here) */}
+        <Route path="/" element={getRootElement()} />
         <Route path="/grm" element={getRootElement()} />
         
         {/* Protected User Routes */}
@@ -75,15 +81,16 @@ const MainRoutes = () => {
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
         {/* Public Routes */}
-        <Route path="/residential/bengaluru/:projectId" element={<ProjectDetail />} />
-        <Route path="/residential/bengaluru" element={<BengaluruResidential />} />
-        <Route path="/bengaluru" element={<BengaluruResidential />} />
-        <Route path="/purva" element={<PurvaSimulation />} />
-        <Route path="/simulation" element={<PurvaSimulation />} />
+        {/* Retired website simulation: keep old links working */}
+        <Route path="/residential/bengaluru/:projectId" element={<OldProjectPage />} />
+        <Route path="/residential/*" element={<Navigate to="/" replace />} />
+        <Route path="/bengaluru" element={<Navigate to="/" replace />} />
+        <Route path="/purva" element={<Navigate to="/" replace />} />
+        <Route path="/simulation" element={<Navigate to="/" replace />} />
         <Route path="/assistant" element={<PolicyAssistant />} />
         <Route path="/help" element={<Help />} />
         <Route path="/auth" element={<Auth />} />
-        <Route path="/login" element={isAuthenticated && !isAdmin && !window.location.search.includes("message=") && !sessionStorage.getItem("phoneVerifyPending") ? <Navigate to="/grm" replace /> : <Auth />} />
+        <Route path="/login" element={isAuthenticated && !isAdmin && !window.location.search.includes("message=") && !sessionStorage.getItem("phoneVerifyPending") ? <Navigate to={nextFromLocation() || "/grm"} replace /> : <Auth />} />
         <Route path="/register" element={<Auth />} />
 
         {/* Admin Routes */}

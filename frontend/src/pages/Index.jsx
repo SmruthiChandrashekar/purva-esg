@@ -18,7 +18,7 @@ function Index() {
   const handleProtectedAction = async (path) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session && !adminUser) {
-      navigate("/login?message=Please login to continue");
+      navigate(`/login?message=Please login to continue&next=${encodeURIComponent(path)}`);
     } else {
       navigate(path);
     }
@@ -27,7 +27,7 @@ function Index() {
   const handleTrack = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session && !adminUser) {
-      navigate("/login");
+      navigate("/login?next=%2Ftrack");
     } else {
       navigate("/track");
     }

@@ -15,9 +15,6 @@ function LodgeSelection() {
           <div className="d-inline-flex align-items-center gap-2 px-3 py-1 mb-3 rounded-pill bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 fs-sm fw-semibold">
             <span>&#127960;</span>
             <span>Residential Project: {projectParam}</span>
-            <Link to="/residential/bengaluru" className="text-decoration-none ms-2 small text-primary opacity-75">
-              (&larr; Change)
-            </Link>
           </div>
         )}
         <h2 className="fw-bold text-heading fs-h2">{t("selectCategory")}</h2>

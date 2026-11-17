@@ -185,8 +185,19 @@ function Navbar() {
           </div>
           </div>
 
-          {/* Theme toggle and bell stay in the bar at every width */}
+          {/* File a complaint, theme toggle and bell stay in the bar at every width */}
           <div className="nav-quick d-flex align-items-center">
+            {/* FILE A COMPLAINT: always in the bar so first-time visitors find it */}
+            {!isAdmin && !location.pathname.startsWith("/lodge") && (
+              <div className="me-3">
+                <Link to="/lodge-selection" className="btn btn-danger btn-sm fw-semibold nav-file-btn">
+                  <i className="bi bi-pencil-square" aria-hidden="true"></i>
+                  <span className="nav-file-label-full">File a complaint</span>
+                  <span className="nav-file-label-short">File</span>
+                </Link>
+              </div>
+            )}
+
             {/* THEME TOGGLE */}
             <div className="me-3">
               <ThemeToggle />

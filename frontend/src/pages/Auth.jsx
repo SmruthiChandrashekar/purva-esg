@@ -15,12 +15,9 @@ const setVerifyPending = (on) => {
   } catch (_) {}
 };
 
-import { PURVA_CITIES_PROJECTS, findProjectByNameOrId } from "../config/projectsData";
-
-const PURVA_PROJECTS = Object.values(PURVA_CITIES_PROJECTS)
-  .flat()
-  .map((p) => p.name)
-  .concat(["Corporate / Other"]);
+import { findProjectByNameOrId } from "../config/projectsData";
+import { nextFromLocation } from "../utils/returnTo";
+import ProjectPicker from "../components/ProjectPicker";
 
 
 const COMPLAINT_CATEGORIES = [
@@ -81,7 +78,7 @@ const Auth = () => {
 
   // Guest Form State
   const [guestData, setGuestData] = useState({
-    project: rememberedProject || PURVA_PROJECTS[0],
+    project: rememberedProject || "",
     category: "Environmental & Sustainability",
     severity: "Medium",
     description: "",
@@ -90,6 +87,8 @@ const Auth = () => {
     email: "",
     phone: "",
   });
+  // Optional project for the guest form (same picker as the other complaint forms)
+  const [guestProject, setGuestProject] = useState(() => (rememberedProject ? findProjectByNameOrId(rememberedProject) : null));
   const [guestLoading, setGuestLoading] = useState(false);
   const [guestResult, setGuestResult] = useState(null); // { ticketId, secretPin }
 
@@ -191,7 +190,7 @@ const Auth = () => {
           return "verify";
         }
         const savedProj = sessionStorage.getItem("purva_selected_project") || projectParam;
-        const targetUrl = savedProj ? `/grm?project=${encodeURIComponent(savedProj)}` : "/grm";
+        const targetUrl = nextFromLocation() || (savedProj ? `/grm?project=${encodeURIComponent(savedProj)}` : "/grm");
         setMessage({ type: "success", text: "Registration successful! Redirecting..." });
         setTimeout(() => { window.location.href = targetUrl; }, 1200);
       }
@@ -229,7 +228,7 @@ const Auth = () => {
       } else {
         setMessage({ type: "success", text: "Login successful! Welcome back." });
         const savedProj = sessionStorage.getItem("purva_selected_project") || projectParam;
-        const targetUrl = savedProj ? `/grm?project=${encodeURIComponent(savedProj)}` : "/grm";
+        const targetUrl = nextFromLocation() || (savedProj ? `/grm?project=${encodeURIComponent(savedProj)}` : "/grm");
         setTimeout(() => { window.location.href = targetUrl; }, 1000);
       }
     } catch (err) {
@@ -327,7 +326,7 @@ const Auth = () => {
         name: guestData.isAnonymous ? "Anonymous Stakeholder" : (guestData.name || "Guest"),
         phone: guestData.phone || "",
         email: guestData.email || "",
-        location: guestData.project,
+        location: guestProject?.location || guestData.project || "",
         date: new Date().toISOString().split("T")[0],
         department: guestData.category,
         source: "Web Portal (Guest)",
@@ -833,24 +832,14 @@ const Auth = () => {
                         </div>
 
                         <form onSubmit={handleGuestSubmit} noValidate>
+                          <ProjectPicker
+                            value={guestProject}
+                            onChange={(p) => {
+                              setGuestProject(p);
+                              setGuestData((prev) => ({ ...prev, project: p?.name || "" }));
+                            }}
+                          />
                           <div className="row g-3 mb-3">
-                            {/* PROJECT NAME */}
-                            <div className="col-12 col-md-6">
-                              <label className="form-label fw-semibold text-navy small mb-1">
-                                Project Name
-                              </label>
-                              <select
-                                name="project"
-                                value={guestData.project}
-                                onChange={handleGuestInputChange}
-                                className="form-select auth-input"
-                                disabled={guestLoading}
-                              >
-                                {PURVA_PROJECTS.map((proj) => (
-                                  <option key={proj} value={proj}>{proj}</option>
-                                ))}
-                              </select>
-                            </div>
 
                             {/* CATEGORY */}
                             <div className="col-12 col-md-6">
