@@ -29,18 +29,20 @@ export default function ProjectPicker({ value, onChange }) {
         <div className="card-body p-3">
           <div className="small text-muted fw-semibold mb-2">Project</div>
           <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3">
-            <div className="d-flex align-items-center gap-3">
+            <div className="d-flex align-items-center gap-3" style={{ minWidth: 0 }}>
+              {/* Sized here too, so the card also fits pages without Lodge.css (e.g. the guest form) */}
               <img
                 src={value.image || "/purva_heritage.jpg"}
                 alt={value.name}
                 className="lodge-project-img rounded-3 shadow-xs"
+                style={{ width: 64, height: 64, objectFit: "cover", flexShrink: 0 }}
               />
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
                   {value.type && <span className="badge bg-navy text-white fs-11">{value.type}</span>}
                   {value.city && <span className="badge bg-light text-muted border fs-11">{value.city}</span>}
                 </div>
-                <h5 className="fw-bold mb-1 text-navy">{value.name}</h5>
+                <h5 className="fw-bold mb-1 text-navy text-break">{value.name}</h5>
                 {value.location && (
                   <p className="text-muted small mb-0">
                     <i className="bi bi-geo-alt-fill text-danger me-1"></i>

@@ -24,14 +24,8 @@ function Index() {
     }
   };
 
-  const handleTrack = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session && !adminUser) {
-      navigate("/login?next=%2Ftrack");
-    } else {
-      navigate("/track");
-    }
-  };
+  // Tracking is public: guests track with the ID they were given
+  const handleTrack = () => navigate("/track");
 
   const handleCheckRef = (e) => {
     if (e) e.preventDefault();

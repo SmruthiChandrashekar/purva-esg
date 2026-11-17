@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { resetApiClientState, apiClient } from "../services/api";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "../services/supabaseClient";
 import { useLanguage } from "../context/LanguageContext";
 import "./Auth.css";
@@ -15,30 +15,12 @@ const setVerifyPending = (on) => {
   } catch (_) {}
 };
 
-import { findProjectByNameOrId } from "../config/projectsData";
 import { nextFromLocation } from "../utils/returnTo";
-import ProjectPicker from "../components/ProjectPicker";
+import GuestComplaintForm from "../components/GuestComplaintForm";
 
-
-const COMPLAINT_CATEGORIES = [
-  "Environmental & Sustainability",
-  "Community & Public Relations",
-  "Site Labor & Safety",
-  "Quality & Construction",
-  "Governance & Compliance",
-  "Other"
-];
-
-const SEVERITY_LEVELS = [
-  "Low",
-  "Medium",
-  "High",
-  "Critical"
-];
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const { t } = useLanguage();
 
   // Mode: "login" | "register" | "guest"
@@ -49,8 +31,6 @@ const Auth = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const projectParam = searchParams.get("project");
-  const storedProject = sessionStorage.getItem("purva_selected_project");
-  const rememberedProject = projectParam || storedProject || "";
 
   useEffect(() => {
     supabase.auth.signOut().catch(() => {});
@@ -76,23 +56,6 @@ const Auth = () => {
   });
   const [errors, setErrors] = useState({});
 
-  // Guest Form State
-  const [guestData, setGuestData] = useState({
-    project: rememberedProject || "",
-    category: "Environmental & Sustainability",
-    severity: "Medium",
-    description: "",
-    isAnonymous: true,
-    name: "",
-    email: "",
-    phone: "",
-  });
-  // Optional project for the guest form (same picker as the other complaint forms)
-  const [guestProject, setGuestProject] = useState(() => (rememberedProject ? findProjectByNameOrId(rememberedProject) : null));
-  const [guestLoading, setGuestLoading] = useState(false);
-  const [guestResult, setGuestResult] = useState(null); // { ticketId, secretPin }
-
-
   // Phone OTP verification (only used when VITE_REQUIRE_PHONE_OTP=true)
   const REQUIRE_PHONE_OTP = import.meta.env.VITE_REQUIRE_PHONE_OTP === "true";
   const [verifyStep, setVerifyStep] = useState(null); // null | "phone" | "otp"
@@ -103,15 +66,6 @@ const Auth = () => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
-    setMessage({ type: "", text: "" });
-  };
-
-  const handleGuestInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setGuestData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
     setMessage({ type: "", text: "" });
   };
 
@@ -305,78 +259,10 @@ const Auth = () => {
     setLoading(false);
   };
 
-  // Guest complaint submission
-  const handleGuestSubmit = async (e) => {
-    e.preventDefault();
-    if (!guestData.description.trim()) {
-      setMessage({ type: "error", text: "Please enter a description of your concern." });
-      return;
-    }
-    setGuestLoading(true);
-    setMessage({ type: "", text: "" });
-
-    const payload = {
-      description: guestData.description.trim(),
-      attachments: [],
-      source: "Web Portal (Guest)",
-      prefilled_severity: guestData.severity,
-      prefilled_department: guestData.category,
-      metadata: {
-        user_id: null,
-        name: guestData.isAnonymous ? "Anonymous Stakeholder" : (guestData.name || "Guest"),
-        phone: guestData.phone || "",
-        email: guestData.email || "",
-        location: guestProject?.location || guestData.project || "",
-        date: new Date().toISOString().split("T")[0],
-        department: guestData.category,
-        source: "Web Portal (Guest)",
-        severity: guestData.severity,
-        prefilled_severity: guestData.severity,
-        prefilled_department: guestData.category,
-        project: guestData.project,
-        is_anonymous: guestData.isAnonymous,
-      },
-    };
-
-    try {
-      const res = await apiClient("/submit-complaint", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const pin = Math.floor(100000 + Math.random() * 900000).toString();
-      if (res.ok) {
-        const data = await res.json();
-        setGuestResult({
-          ticketId: data.complaint_id || data.grievance_id || data.id,
-          secretPin: pin,
-        });
-      } else {
-        const fallbackId = "GR-" + Math.floor(100000 + Math.random() * 900000);
-        setGuestResult({
-          ticketId: fallbackId,
-          secretPin: pin,
-        });
-      }
-    } catch (err) {
-      console.error("Guest submit fallback:", err);
-      const fallbackId = "GR-" + Math.floor(100000 + Math.random() * 900000);
-      const pin = Math.floor(100000 + Math.random() * 900000).toString();
-      setGuestResult({
-        ticketId: fallbackId,
-        secretPin: pin,
-      });
-    } finally {
-      setGuestLoading(false);
-    }
-  };
-
   const switchMode = (newMode) => {
     setMode(newMode);
     setErrors({});
     setMessage({ type: "", text: "" });
-    setGuestResult(null);
     setShowPassword(false);
     setShowConfirmPassword(false);
     setVerifyStep(null);
@@ -805,224 +691,7 @@ const Auth = () => {
                 )}
 
                 {/* ────────────────── TAB 3: CONTINUE AS GUEST ────────────────── */}
-                {mode === "guest" && (
-                  <div>
-                    {!guestResult ? (
-                      <>
-                        <div className="mb-4">
-                          <div className="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-                            <div>
-                              <h4 className="fw-bold mb-1 text-navy">Quick Guest Submission</h4>
-                              <p className="text-muted small mb-0">
-                                Submit your concern anonymously or without an account. You will receive a Ticket ID and Secret PIN to track resolution.
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              className="btn btn-outline-danger btn-sm fw-semibold rounded-pill px-3 py-1 mt-1"
-                              onClick={() => {
-                                sessionStorage.setItem("isGuest", "true");
-                                const proj = rememberedProject || guestData.project;
-                                navigate(proj ? `/lodge-external?project=${encodeURIComponent(proj)}` : "/lodge-external");
-                              }}
-                            >
-                              Open Full Form &rarr;
-                            </button>
-                          </div>
-                        </div>
-
-                        <form onSubmit={handleGuestSubmit} noValidate>
-                          <ProjectPicker
-                            value={guestProject}
-                            onChange={(p) => {
-                              setGuestProject(p);
-                              setGuestData((prev) => ({ ...prev, project: p?.name || "" }));
-                            }}
-                          />
-                          <div className="row g-3 mb-3">
-
-                            {/* CATEGORY */}
-                            <div className="col-12 col-md-6">
-                              <label className="form-label fw-semibold text-navy small mb-1">
-                                Issue Category
-                              </label>
-                              <select
-                                name="category"
-                                value={guestData.category}
-                                onChange={handleGuestInputChange}
-                                className="form-select auth-input"
-                                disabled={guestLoading}
-                              >
-                                {COMPLAINT_CATEGORIES.map((cat) => (
-                                  <option key={cat} value={cat}>{cat}</option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-
-                          <div className="row g-3 mb-3">
-                            {/* SEVERITY */}
-                            <div className="col-12 col-md-6">
-                              <label className="form-label fw-semibold text-navy small mb-1">
-                                Severity Level
-                              </label>
-                              <select
-                                name="severity"
-                                value={guestData.severity}
-                                onChange={handleGuestInputChange}
-                                className="form-select auth-input"
-                                disabled={guestLoading}
-                              >
-                                {SEVERITY_LEVELS.map((sev) => (
-                                  <option key={sev} value={sev}>{sev}</option>
-                                ))}
-                              </select>
-                            </div>
-
-                            {/* ANONYMOUS TOGGLE */}
-                            <div className="col-12 col-md-6 d-flex align-items-center pt-md-4">
-                              <div className="form-check">
-                                <input
-                                  className="form-check-input"
-                                  type="checkbox"
-                                  id="guestAnonCheck"
-                                  name="isAnonymous"
-                                  checked={guestData.isAnonymous}
-                                  onChange={handleGuestInputChange}
-                                />
-                                <label className="form-check-label text-navy small fw-semibold" htmlFor="guestAnonCheck">
-                                  Submit Anonymously
-                                </label>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* OPTIONAL CONTACT INFO (IF NOT ANONYMOUS) */}
-                          {!guestData.isAnonymous && (
-                            <div className="p-3 bg-light rounded-3 border mb-3">
-                              <div className="row g-3">
-                                <div className="col-12 col-md-4">
-                                  <label className="form-label text-muted small mb-1">Your Name</label>
-                                  <input
-                                    type="text"
-                                    name="name"
-                                    value={guestData.name}
-                                    onChange={handleGuestInputChange}
-                                    className="form-control form-control-sm"
-                                    placeholder="Name"
-                                  />
-                                </div>
-                                <div className="col-12 col-md-4">
-                                  <label className="form-label text-muted small mb-1">Phone Number</label>
-                                  <input
-                                    type="tel"
-                                    name="phone"
-                                    value={guestData.phone}
-                                    onChange={handleGuestInputChange}
-                                    className="form-control form-control-sm"
-                                    placeholder="+91..."
-                                  />
-                                </div>
-                                <div className="col-12 col-md-4">
-                                  <label className="form-label text-muted small mb-1">Email Address</label>
-                                  <input
-                                    type="email"
-                                    name="email"
-                                    value={guestData.email}
-                                    onChange={handleGuestInputChange}
-                                    className="form-control form-control-sm"
-                                    placeholder="email@example.com"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* DESCRIPTION */}
-                          <div className="mb-4">
-                            <label className="form-label fw-semibold text-navy small mb-1">
-                              Description of Concern
-                            </label>
-                            <textarea
-                              name="description"
-                              rows={4}
-                              value={guestData.description}
-                              onChange={handleGuestInputChange}
-                              className="form-control auth-input"
-                              placeholder="Please describe the complaint, location specifics, or incident details..."
-                              required
-                              disabled={guestLoading}
-                            />
-                          </div>
-
-                          {/* SUBMIT BUTTON */}
-                          <button
-                            type="submit"
-                            disabled={guestLoading}
-                            className="btn btn-purva-navy w-100 fw-bold py-2 shadow-sm"
-                          >
-                            {guestLoading ? (
-                              <>
-                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                                Submitting...
-                              </>
-                            ) : (
-                              "Submit"
-                            )}
-                          </button>
-                        </form>
-                      </>
-                    ) : (
-                      /* GUEST RECEIPT */
-                      <div className="text-center py-4">
-                        <div className="auth-check-icon mx-auto mb-3" style={{ width: "48px", height: "48px", fontSize: "22px" }}>
-                          <i className="bi bi-check-lg"></i>
-                        </div>
-                        <h4 className="fw-bold mb-1 text-navy">Complaint Submitted</h4>
-                        <p className="text-muted small mb-4">
-                          Your concern has been registered and routed to the ESG resolution team.
-                        </p>
-
-                        <div className="bg-light p-3 rounded-3 border mb-4 d-inline-block text-start w-100" style={{ maxWidth: "420px" }}>
-                          <div className="d-flex justify-content-between align-items-center pb-2 mb-2 border-bottom">
-                            <div>
-                              <span className="text-muted d-block small text-uppercase fw-semibold">Ticket ID</span>
-                              <h4 className="fw-bold mb-0 text-danger ls-1">{guestResult.ticketId}</h4>
-                            </div>
-                            <div className="text-end">
-                              <span className="text-muted d-block small text-uppercase fw-semibold">Secret PIN</span>
-                              <h4 className="fw-bold mb-0 text-navy ls-1">{guestResult.secretPin}</h4>
-                            </div>
-                          </div>
-                          <p className="text-muted small mb-0">
-                            <i className="bi bi-shield-check me-1 text-success"></i>
-                            Save this Ticket ID and Secret PIN to track your complaint status privately at any time.
-                          </p>
-                        </div>
-
-                        <div className="d-flex justify-content-center gap-3">
-                          <button
-                            type="button"
-                            className="btn btn-outline-secondary px-4 fw-semibold"
-                            onClick={() => {
-                              setGuestResult(null);
-                              setGuestData((p) => ({ ...p, description: "" }));
-                            }}
-                          >
-                            Submit Another
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-purva-navy px-4 fw-semibold shadow-sm"
-                            onClick={() => navigate("/track", { state: { trackingId: guestResult.ticketId } })}
-                          >
-                            Track Status &rarr;
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                {mode === "guest" && <GuestComplaintForm onLogin={() => switchMode("login")} />}
 
               </div>
             </div>

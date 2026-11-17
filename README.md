@@ -14,8 +14,8 @@ while ESG staff work through the complaints in tiered queues with deadlines.
 
 | Area | Details |
 |------|---------|
-| **Filing** | External stakeholder form with a **project picker** (projects come from the `projects` table), file attachments, anonymous filing, incident date (no future dates) |
-| **AI triage** | An LLM (Groq, `qwen/qwen3.8-27b`) sets severity (Low / Medium / High). Department is always ESG. Keyword rules force High for POSH, site-safety and bribery mentions. Low form submissions are sent to the chatbot instead of being filed; if the AI is unavailable the complaint is filed as Medium. |
+| **Filing** | Guest form on the login page (no account; one complaint per hour; AI decides severity). External stakeholder form with a **project picker** (projects come from the `projects` table), file attachments, anonymous filing, incident date (no future dates) |
+| **AI triage** | An LLM (Groq, `qwen/qwen3.8-27b`) sets severity (Low / Medium / High). Department is always ESG. Keyword rules force High for POSH, site-safety and bribery mentions. For a Low complaint the form first shows the policy answer, with **File it anyway** to file it at L1 without retyping; if the AI is unavailable the complaint is filed as Medium. |
 | **Routing and deadlines** | Medium starts at L1, High at L2. Tier deadlines: L1 48 h, L2 24 h, L3 12 h, HEAD 4 h. A background monitor checks every 5 minutes and escalates overdue complaints L1 → L2 → L3 → HEAD. |
 | **Policy chatbot ("Purva")** | Answers from ~40 company policy documents using hybrid search (BM25 keywords + vector meaning-based search, merged). Turns complaint-like messages into a filing. |
 | **Tracking** | Anyone with a complaint ID (first 5+ characters) sees its status, deadline and documents shared with them. Logged-in users see their own complaints on a dashboard. |
@@ -212,8 +212,10 @@ Vercel's Hobby plan is for non-commercial use. Production needs paid plans for t
 
 ## Known limitations
 
-- **Guest mode does not work end to end:** "Continue as Guest" opens the complaint form, but
-  the backend needs a login to file, so a guest cannot submit.
+- **Guest filing is limited:** guests (Login page → "Continue as Guest") file through
+  `/api/guest/complaint` without an account, one complaint per visitor per hour (by IP address,
+  kept in memory, so a backend restart resets it). Guests can't attach files, and their
+  complaints aren't linked to an account: they track them with the ID they're given.
 - **Bribery questions:** any message mentioning bribery or corruption, including a plain
   question about the Anti-Bribery policy, is treated as a High complaint. purva-main has a
   fix for this that is not in this repo.

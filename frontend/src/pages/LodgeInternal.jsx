@@ -7,6 +7,7 @@ import { apiClient } from "../services/api";
 import FileUpload from "../components/FileUpload";
 import { saveToQueue } from "../services/offlineQueue";
 import ProjectPicker from "../components/ProjectPicker";
+import LowPriorityAnswer from "../components/LowPriorityAnswer";
 import { initialProject } from "../utils/projectSelection";
 import "./Lodge.css";
 
@@ -16,6 +17,8 @@ function LodgeInternal() {
   // Optional project: pre-selected from ?project= in the link or the last choice in this tab
   const [project, setProject] = useState(() => initialProject(location.search));
   const [submittedId, setSubmittedId] = useState(null);
+  // Low-priority result: the policy answer, plus the payload to file it anyway
+  const [lowAnswer, setLowAnswer] = useState(null);
   const [queryRedirect, setQueryRedirect] = useState(null); // set when intent = Query
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { t, langCode } = useLanguage();
@@ -49,6 +52,27 @@ function LodgeInternal() {
   // Dispatch query text to the chatbot panel via a DOM event
   const sendToChat = (text) => {
     window.dispatchEvent(new CustomEvent("chatbot-open", { detail: text }));
+  };
+
+  // "File it anyway" for a low-priority concern: same complaint, filed at L1
+  const fileAnyway = async () => {
+    if (!lowAnswer) return;
+    setIsSubmitting(true);
+    try {
+      const res = await apiClient("/submit-complaint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...lowAnswer.payload, file_anyway: true }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((typeof body.detail === "string" ? body.detail : `Server error (${res.status})`));
+      setLowAnswer(null);
+      setSubmittedId(body.grievance_id || body.id);
+    } catch (err) {
+      alert(`Failed to submit complaint: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -99,8 +123,9 @@ function LodgeInternal() {
 
       const data = await submitRes.json();
       if (data.redirect === "assistant") {
-        // Low-priority concern: nothing was filed, so continue the conversation with Purva.
-        navigate("/assistant", { state: { prefill: cleanDescription } });
+        // Low-priority concern: nothing was filed yet. Show the policy answer here, with
+        // "File it anyway" to file the same complaint without retyping it.
+        setLowAnswer({ text: data.answer, sources: data.sources || [], payload, prefill: cleanDescription });
         return;
       }
       setSubmittedId(data.grievance_id || data.id);
@@ -165,7 +190,19 @@ function LodgeInternal() {
                   </div>
                 )}
 
+                {lowAnswer && (
+                  <LowPriorityAnswer
+                    answer={lowAnswer.text}
+                    sources={lowAnswer.sources}
+                    busy={isSubmitting}
+                    onFileAnyway={fileAnyway}
+                    onResolved={() => { setLowAnswer(null); navigate("/grm"); }}
+                    onAskPurva={() => navigate("/assistant", { state: { prefill: lowAnswer.prefill } })}
+                  />
+                )}
+
                 {/* Step 1 (optional): which project the complaint is about */}
+                {!lowAnswer && (
                 <ProjectPicker
                   value={project}
                   onChange={(p) => {
@@ -173,8 +210,9 @@ function LodgeInternal() {
                     if (p?.location) setFormData((prev) => ({ ...prev, projectLocation: prev.projectLocation || p.location }));
                   }}
                 />
+                )}
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} className={lowAnswer ? "d-none" : undefined}>
                   <div className="row">
                     <div className="col-md-6 mb-3">
                       <label className="fw-semibold mb-1">{t("employeeId")}</label>

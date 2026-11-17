@@ -16,7 +16,9 @@ import logging
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Optional
 from supabase import create_client, Client
 # ==============================================================================
@@ -329,6 +331,21 @@ class ComplaintMetadata(BaseModel):
     prefilled_department: Optional[str] = None
     project: Optional[str] = None   # Puravankara project the complaint relates to
 
+    @field_validator("date")
+    @classmethod
+    def _incident_date_not_in_future(cls, v):
+        # Incident date must be a real YYYY-MM-DD that has already happened. Compared with
+        # India's date: the server runs on UTC, which is still "yesterday" until 5:30 am IST.
+        if v is None or not v.strip():
+            return None
+        try:
+            incident = datetime.strptime(v.strip(), "%Y-%m-%d").date()
+        except ValueError:
+            raise ValueError("Incident date must be in YYYY-MM-DD format")
+        if incident > datetime.now(ZoneInfo("Asia/Kolkata")).date():
+            raise ValueError("Incident date can't be in the future")
+        return incident.isoformat()
+
 class SubmitComplaintRequest(BaseModel):
     description: str
     lang: str = "en"   # ISO 639-1 code: en | hi | kn
@@ -337,6 +354,9 @@ class SubmitComplaintRequest(BaseModel):
     source: Optional[str] = None
     prefilled_severity: Optional[str] = None
     prefilled_department: Optional[str] = None
+    # Set when the person was shown the policy answer for a low-priority concern and
+    # chose "File it anyway": the complaint is then filed at L1 instead of being sent back.
+    file_anyway: bool = False
 
 class UpdateStatusRequest(BaseModel):
     grievance_id: str
@@ -1195,12 +1215,26 @@ async def submit_complaint(request: SubmitComplaintRequest, user: dict = Depends
         # Low-severity direct submissions are not formal grievances: hand them to the
         # policy assistant instead of storing a ticket or notifying anyone.
         # (Chatbot escalations are an explicit user choice to file, so they are kept.)
-        if not is_chatbot_escalated and severity.lower() == "low":
-            logging.info("Low-severity direct submission redirected to assistant (nothing stored)")
+        # The answer is shown on the form itself, with a "File it anyway" button that files the
+        # same text again with file_anyway=True, so nobody has to retype or log in to escalate.
+        file_low_anyway = not is_chatbot_escalated and severity.lower() == "low" and request.file_anyway
+        if not is_chatbot_escalated and severity.lower() == "low" and not request.file_anyway:
+            logging.info("Low-severity direct submission: policy answer returned (nothing stored)")
+            answer, sources = None, []
+            try:
+                rag = await asyncio.to_thread(get_rag_response, clean_desc_en)
+                answer = (rag or {}).get("answer")
+                sources = sorted({s.get("source") for s in (rag or {}).get("sources", []) if s.get("source")})
+                if answer and user_lang and user_lang != "en":
+                    answer = translate_text(answer, user_lang)
+            except Exception as rag_err:
+                logging.warning("Policy answer for a low-priority submission failed: %s", rag_err)
             return {
                 "redirect": "assistant",
                 "severity": severity,
                 "message": "This looks like a low-priority concern. The Purva assistant can help with it.",
+                "answer": answer,
+                "sources": sources,
             }
 
         # 🔹 STEP 3.5: ESCALATION AGENT (non-blocking)
@@ -1215,7 +1249,11 @@ async def submit_complaint(request: SubmitComplaintRequest, user: dict = Depends
         )
 
         # 🔹 STEP 4: DETERMINISTIC ROUTING — Tier/SLA Assignment
-        route_info = determine_initial_route(severity, category)
+        if file_low_anyway:
+            # Same routing as a Low concern handed over from the chatbot: L1, human handling
+            route_info = {**chatbot_handoff_route(category), "initial_handler": "L1"}
+        else:
+            route_info = determine_initial_route(severity, category)
 
         assigned_to = None
         assigned_admin_name = None
@@ -1327,6 +1365,102 @@ async def submit_complaint(request: SubmitComplaintRequest, user: dict = Depends
             raise e
         raise HTTPException(status_code=500, detail=str(e))
 
+
+
+# 👤 GUEST COMPLAINTS (no account) ──────────────────────────────────────────
+# Guests file without logging in, so each visitor (by IP address) may file one complaint
+# per hour. A low-priority concern first gets the policy answer; "File it anyway" for that
+# same concern is allowed within the hour. Kept in memory: a backend restart clears it.
+GUEST_WINDOW_SECONDS = 3600
+_guest_activity: dict[str, dict] = {}   # ip -> {"at": started, "filed": bool, "low_pending": bool}
+
+
+class GuestComplaintRequest(BaseModel):
+    description: str = Field(min_length=10, max_length=5000)
+    lang: str = "en"
+    project: Optional[str] = Field(default=None, max_length=120)
+    date: Optional[str] = None
+    name: Optional[str] = Field(default=None, max_length=120)
+    phone: Optional[str] = Field(default=None, max_length=20)
+    email: Optional[str] = Field(default=None, max_length=200)
+    is_anonymous: bool = False
+    file_anyway: bool = False
+
+
+def _guest_ip(request: Request) -> str:
+    # Render sits behind Cloudflare, which puts the visitor's address in these headers.
+    # X-Forwarded-For can be set by the visitor, so it is only a fallback.
+    for header in ("true-client-ip", "cf-connecting-ip"):
+        value = (request.headers.get(header) or "").strip()
+        if value:
+            return value
+    forwarded = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    return forwarded or (request.client.host if request.client else "unknown")
+
+
+def _guest_wait_message(seconds_left: float) -> str:
+    minutes = max(1, int((seconds_left + 59) // 60))
+    unit = "minute" if minutes == 1 else "minutes"
+    return (f"As a guest you can file one complaint per hour. Please come back in {minutes} {unit}, "
+            "or log in to file more.")
+
+
+@app.post("/api/guest/complaint")
+async def guest_complaint(body: GuestComplaintRequest, http_request: Request):
+    ip = _guest_ip(http_request)
+    now = time.time()
+    for key in [k for k, v in _guest_activity.items() if now - v["at"] >= GUEST_WINDOW_SECONDS]:
+        _guest_activity.pop(key, None)
+    entry = _guest_activity.get(ip)
+    if entry:
+        follow_up = body.file_anyway and entry.get("low_pending") and not entry.get("filed")
+        if not follow_up:
+            seconds_left = GUEST_WINDOW_SECONDS - (now - entry["at"])
+            raise HTTPException(
+                status_code=429,
+                detail=_guest_wait_message(seconds_left),
+                headers={"Retry-After": str(int(seconds_left))},
+            )
+    else:
+        entry = {"at": now, "filed": False, "low_pending": False}
+        _guest_activity[ip] = entry
+
+    try:
+        metadata = ComplaintMetadata(
+            user_id=None,
+            name=None if body.is_anonymous else (body.name or None),
+            phone=None if body.is_anonymous else (body.phone or None),
+            email=None if body.is_anonymous else (body.email or None),
+            date=body.date,
+            is_anonymous=body.is_anonymous,
+            source="Web Portal (Guest)",
+            project=body.project,
+        )
+    except Exception as e:
+        _guest_activity.pop(ip, None)   # bad input should not use up their hour
+        errors = getattr(e, "errors", None)
+        msg = errors()[0].get("msg", str(e)) if callable(errors) and errors() else str(e)
+        raise HTTPException(status_code=422, detail=msg.replace("Value error, ", ""))
+
+    request = SubmitComplaintRequest(
+        description=body.description,
+        lang=body.lang,
+        metadata=metadata,
+        attachments=[],
+        source="Web Portal (Guest)",
+        file_anyway=body.file_anyway,
+    )
+    try:
+        result = await submit_complaint(request, user={"user_id": None, "role": "guest"})
+    except HTTPException:
+        if not entry.get("low_pending"):
+            _guest_activity.pop(ip, None)   # nothing was filed: let them try again
+        raise
+    if result.get("grievance_id"):
+        entry.update(filed=True, low_pending=False)
+    elif result.get("redirect") == "assistant":
+        entry["low_pending"] = True
+    return result
 
 
 

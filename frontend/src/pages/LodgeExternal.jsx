@@ -7,6 +7,7 @@ import { apiClient } from "../services/api";
 import FileUpload from "../components/FileUpload";
 import { saveToQueue } from "../services/offlineQueue";
 import ProjectPicker from "../components/ProjectPicker";
+import LowPriorityAnswer from "../components/LowPriorityAnswer";
 import { initialProject } from "../utils/projectSelection";
 import "./Lodge.css";
 import { SINGLE_DEPARTMENT_MODE } from "../config/features";
@@ -19,7 +20,8 @@ function LodgeExternal() {
   const [project, setProject] = useState(() => initialProject(location.search));
 
   const [submittedId, setSubmittedId] = useState(null);
-  const [secretPin, setSecretPin] = useState(null);
+  // Low-priority result: the policy answer, plus the payload to file it anyway
+  const [lowAnswer, setLowAnswer] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [queryRedirect, setQueryRedirect] = useState(null);
   const { t } = useLanguage();
@@ -53,6 +55,27 @@ function LodgeExternal() {
 
   const sendToChat = (text) => {
     window.dispatchEvent(new CustomEvent("chatbot-open", { detail: text }));
+  };
+
+  // "File it anyway" for a low-priority concern: same complaint, filed at L1
+  const fileAnyway = async () => {
+    if (!lowAnswer) return;
+    setIsSubmitting(true);
+    try {
+      const res = await apiClient("/submit-complaint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...lowAnswer.payload, file_anyway: true }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((typeof body.detail === "string" ? body.detail : `Server error (${res.status})`));
+      setLowAnswer(null);
+      setSubmittedId(body.grievance_id || body.id);
+    } catch (err) {
+      alert(`Failed to submit complaint: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -102,12 +125,11 @@ function LodgeExternal() {
 
       const data = await submitRes.json();
       if (data.redirect === "assistant") {
-        // Low-priority concern: nothing was filed, so continue the conversation with Purva.
-        navigate("/assistant", { state: { prefill: cleanDescription } });
+        // Low-priority concern: nothing was filed yet. Show the policy answer here, with
+        // "File it anyway" to file the same complaint without retyping it.
+        setLowAnswer({ text: data.answer, sources: data.sources || [], payload, prefill: cleanDescription });
         return;
       }
-      const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
-      setSecretPin(generatedPin);
       setSubmittedId(data.grievance_id || data.id);
       return;
 
@@ -143,7 +165,19 @@ function LodgeExternal() {
               <>
                 <h3 className="mb-4 fw-bold">{t("lodgeExternal")}</h3>
 
+                {lowAnswer && (
+                  <LowPriorityAnswer
+                    answer={lowAnswer.text}
+                    sources={lowAnswer.sources}
+                    busy={isSubmitting}
+                    onFileAnyway={fileAnyway}
+                    onResolved={() => { setLowAnswer(null); navigate("/grm"); }}
+                    onAskPurva={() => navigate("/assistant", { state: { prefill: lowAnswer.prefill } })}
+                  />
+                )}
+
                 {/* Step 1 (optional): which project the complaint is about */}
+                {!lowAnswer && (
                 <ProjectPicker
                   value={project}
                   onChange={(p) => {
@@ -151,6 +185,7 @@ function LodgeExternal() {
                     if (p?.location) setFormData((prev) => ({ ...prev, cityLocation: prev.cityLocation || p.location }));
                   }}
                 />
+                )}
 
                 {/* Query / Low / Medium Redirect Banner */}
                 {queryRedirect && (
@@ -179,7 +214,7 @@ function LodgeExternal() {
                   </div>
                 )}
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} className={lowAnswer ? "d-none" : undefined}>
 
                   <div className="mb-3">
                     <label className="fw-semibold mb-1">{t("orgName")}</label>
@@ -272,16 +307,10 @@ function LodgeExternal() {
                       <span className="text-muted d-block mb-1 text-uppercase fs-12 fw-semibold ls-1">Ticket ID</span>
                       <h3 className="fw-bold mb-0 text-danger ls-2">{submittedId}</h3>
                     </div>
-                    {secretPin && (
-                      <div className="text-end">
-                        <span className="text-muted d-block mb-1 text-uppercase fs-12 fw-semibold ls-1">Secret PIN</span>
-                        <h3 className="fw-bold mb-0 text-navy ls-2">{secretPin}</h3>
-                      </div>
-                    )}
                   </div>
                   <p className="text-muted small mb-0">
                     <i className="bi bi-shield-check me-1 text-success"></i>
-                    Please save this <strong>Ticket ID</strong> and <strong>Secret PIN</strong> to track this complaint anonymously at any time.
+                    Please save this <strong>Ticket ID</strong>. You can track the complaint with it at any time.
                   </p>
                 </div>
                 <div className="d-flex justify-content-center gap-3">
