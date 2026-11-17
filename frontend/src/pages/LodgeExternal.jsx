@@ -92,6 +92,7 @@ function LodgeExternal() {
       description: cleanDescription,
       attachments: formData.attachments,
       source: location.state?.source || null,
+      escalation_token: location.state?.escalation_token || null,
       prefilled_severity: location.state?.severity || null,
       prefilled_department: location.state?.department || null,
       metadata: {

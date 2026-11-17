@@ -2,6 +2,9 @@ import os
 import re
 import sys
 import json
+import hmac
+import hashlib
+import base64
 
 # Ensure project root is in path for 'agents', 'rag', and 'backend' modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -346,6 +349,64 @@ class ComplaintMetadata(BaseModel):
             raise ValueError("Incident date can't be in the future")
         return incident.isoformat()
 
+# ── Chatbot escalation tokens ─────────────────────────────────────────────
+# When the chatbot triages a message, the form it opens may file the complaint with the
+# chatbot's severity and department instead of classifying it again. Those values used to
+# come straight from the browser, so anyone could file their own complaint as High in any
+# department. Now /api/agents/chat signs its decision, and /submit-complaint only uses
+# prefilled values with a valid, unexpired token for the same text. Stateless, so it
+# survives restarts.
+ESCALATION_TOKEN_TTL_SECONDS = 24 * 3600
+
+
+def _escalation_secret() -> bytes:
+    secret = os.environ.get("ESCALATION_SECRET") or (
+        "escalation:" + (os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or "")
+    )
+    return hashlib.sha256(secret.encode()).digest()
+
+
+def _escalation_text_key(text: str | None) -> str:
+    # Letters and digits only (any language), lower-cased: emojis, punctuation and spacing
+    # differences between the chat message and the form don't matter.
+    norm = re.sub(r"[\W_]+", "", (text or "").lower())
+    return hashlib.sha256(norm.encode()).hexdigest()[:32]
+
+
+def make_escalation_token(severity: str, department: str, text: str) -> str:
+    payload = json.dumps({
+        "s": (severity or "").upper(),
+        "d": department or "",
+        "h": _escalation_text_key(text),
+        "e": int(time.time()) + ESCALATION_TOKEN_TTL_SECONDS,
+    }, separators=(",", ":")).encode()
+    body = base64.urlsafe_b64encode(payload).decode().rstrip("=")
+    sig = hmac.new(_escalation_secret(), body.encode(), hashlib.sha256).hexdigest()
+    return f"{body}.{sig}"
+
+
+def read_escalation_token(token: str | None, text: str | None) -> dict | None:
+    """The signed chatbot decision, or None if the token is missing, forged, expired
+    or was issued for different text."""
+    if not token or "." not in token:
+        return None
+    body, sig = token.rsplit(".", 1)
+    expected = hmac.new(_escalation_secret(), body.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected):
+        return None
+    try:
+        data = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+    except Exception:
+        return None
+    if int(data.get("e", 0)) < time.time():
+        return None
+    if data.get("h") != _escalation_text_key(text):
+        return None
+    if data.get("s") not in ("LOW", "MEDIUM", "HIGH"):
+        return None
+    return data
+
+
 class SubmitComplaintRequest(BaseModel):
     description: str
     lang: str = "en"   # ISO 639-1 code: en | hi | kn
@@ -357,6 +418,8 @@ class SubmitComplaintRequest(BaseModel):
     # Set when the person was shown the policy answer for a low-priority concern and
     # chose "File it anyway": the complaint is then filed at L1 instead of being sent back.
     file_anyway: bool = False
+    # Signed chatbot decision from /api/agents/chat (see make_escalation_token)
+    escalation_token: Optional[str] = None
 
 class UpdateStatusRequest(BaseModel):
     grievance_id: str
@@ -1056,6 +1119,10 @@ async def chat_with_agent(request: ChatRequest):
 
         return {
             "response": final_response,
+            # Signed record of this triage, so "Open Grievance Form" can file with it
+            "escalation_token": make_escalation_token(
+                agent_result.get("severity", "") or "LOW", agent_result.get("department", "") or "", request.message
+            ),
             "sources": agent_result.get("sources", []),
             "intent": intent_val,
             "source_type": source_type_val,
@@ -1186,18 +1253,22 @@ async def submit_complaint(request: SubmitComplaintRequest, user: dict = Depends
 
         # 🔹 STEP 2 & 3: CLASSIFY CATEGORY & SEVERITY
         # Check if pre-classified from chatbot escalation
-        is_chatbot_escalated = (
+        claims_chatbot = (
             request.source == "CHATBOT_ESCALATION"
             or (meta and getattr(meta, "source", None) == "CHATBOT_ESCALATION")
         )
+        # Only trust the chatbot's severity/department when the server signed them for this text
+        chatbot_decision = read_escalation_token(request.escalation_token, description_original) if claims_chatbot else None
+        is_chatbot_escalated = chatbot_decision is not None
+        if claims_chatbot and not is_chatbot_escalated:
+            logging.warning("Chatbot escalation without a valid token (missing, edited text or forged); classifying normally")
 
         if is_chatbot_escalated:
-            raw_sev = request.prefilled_severity or (meta and getattr(meta, "prefilled_severity", None)) or (meta and getattr(meta, "severity", None)) or "LOW"
-            severity = raw_sev.capitalize()
-            category = request.prefilled_department or (meta and getattr(meta, "prefilled_department", None)) or (meta and getattr(meta, "department", None)) or "CRM"
+            severity = chatbot_decision["s"].capitalize()
+            category = chatbot_decision["d"] or "CRM"
             # Normalize internal labels
-            if category in ["Internal HR", "Operations", "External Relations", ""]:
-                category = "CRM" if not request.prefilled_department else request.prefilled_department
+            if category in ["Internal HR", "Operations", "External Relations"]:
+                category = "CRM"
             logging.info("Skipping double-classification for CHATBOT_ESCALATION (severity=%s, category=%s)", severity, category)
         else:
             # Full LLM Agent classification for direct submissions
