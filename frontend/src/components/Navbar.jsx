@@ -6,6 +6,10 @@ import ThemeToggle from "./ThemeToggle";
 import NotificationDropdown from "./NotificationDropdown";
 import "./Navbar.css";
 
+// The bar only shows the first name; long full names pushed Logout off the screen.
+// The full name is in the tooltip and on the profile page.
+const firstName = (name) => (name || "").trim().split(/\s+/)[0] || "";
+
 function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -144,7 +148,7 @@ function Navbar() {
                   </div>
                 )}
                 <span className="fs-14 text-theme-muted">
-                  <span className="text-heading fw-bold">{userDetails?.name || "Admin"}</span>
+                  <span className="text-heading fw-bold" title={userDetails?.name || "Admin"}>{firstName(userDetails?.name) || "Admin"}</span>
                 </span>
               </Link>
               <button onClick={handleAdminLogout} className="btn btn-outline-danger px-3 fw-semibold fs-14">
@@ -173,7 +177,7 @@ function Navbar() {
                   </div>
                 )}
                 <span className="text-theme-muted nav-greeting">
-                  <span className="text-heading fw-semibold">{(userDetails?.name || "User").split(" ")[0]}</span>
+                  <span className="text-heading fw-semibold" title={userDetails?.name || "User"}>{firstName(userDetails?.name) || "User"}</span>
                 </span>
               </Link>
               <button onClick={handleLogout} className="btn btn-outline-danger btn-sm px-3 fw-semibold nav-logout">

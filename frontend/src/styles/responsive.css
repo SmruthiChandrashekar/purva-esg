@@ -141,10 +141,42 @@ body {
   .nav-menu-tail > * { white-space: nowrap; }
 }
 
+/* Account name in the bar: first name only, at most 9rem, and on desktop it is the one
+   thing that shrinks (ending in "…") when space runs out, so Logout always stays on
+   screen. Everything else in the bar keeps its size. */
+.nav-profile-link > span:not(.rounded-circle) {
+  max-width: 9rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 1200px) {
+  .site-navbar .container { flex-wrap: nowrap; }
+  .nav-shell { flex-shrink: 1; min-width: 0; }
+  .nav-shell > *,
+  .nav-menu-links > *,
+  .nav-quick > *,
+  .nav-menu-tail > * { flex-shrink: 0; }
+  .nav-menu-tail { min-width: 0; flex-shrink: 1; }
+  .nav-menu-tail > .d-flex { flex-shrink: 1; min-width: 0; }
+  .nav-profile-link { min-width: 0; flex-shrink: 1; }
+  .nav-profile-link > img,
+  .nav-profile-link > div { flex-shrink: 0; }
+}
+
+/* Wide desktops: the bar is capped at 1320px, so the links sit a little closer
+   (5 links + File + theme + bell + language + account + Logout must fit) */
+@media (min-width: 1400px) {
+  .nav-menu-links > a.me-4,
+  .nav-menu-tail > .me-4 { margin-right: 18px !important; }
+}
+
 @media (min-width: 1200px) and (max-width: 1399.98px) {
   .nav-menu-links > a.me-4,
   .nav-menu-tail > .me-4,
-  .nav-menu-tail .me-3 { margin-right: 14px !important; }
+  .nav-menu-tail .me-3 { margin-right: 10px !important; }
   .site-navbar .navbar-brand-logo { max-width: 150px; }
   /* Account shows as just the avatar here (the name is in the profile page) */
   .nav-profile-link > span:not(.rounded-circle) { display: none; }
