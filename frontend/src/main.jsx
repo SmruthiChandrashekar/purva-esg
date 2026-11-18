@@ -18,6 +18,15 @@ import { initMotion } from "./utils/motion";
 
 // Register Service Worker for PWA (offline caching + background sync)
 if ("serviceWorker" in navigator) {
+  // When a newer service worker takes over a page that an older one served,
+  // reload once so the old page never keeps running against new files.
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  let reloadedForNewWorker = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || reloadedForNewWorker) return;
+    reloadedForNewWorker = true;
+    window.location.reload();
+  });
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register("/sw.js")

@@ -49,11 +49,28 @@ export default defineConfig({
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-        // Precache all built assets (JS, CSS, HTML, images)
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp}'],
+        // Precache built assets, but NOT index.html. If the page itself is
+        // precached, a phone that visited weeks ago gets that old page first
+        // (e.g. the removed simulation), which then crashes and reloads.
+        globPatterns: ['**/*.{js,css,ico,png,svg,jpg,jpeg,webp}'],
+        // Don't answer page loads from the precache; the rule below does it.
+        navigateFallback: null,
+        cleanupOutdatedCaches: true,
 
         // Runtime caching strategies
         runtimeCaching: [
+          {
+            // Page loads: always try the network first so a QR scan gets the
+            // current version. The cached copy is only used when offline.
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'pages',
+              networkTimeoutSeconds: 4,
+              expiration: { maxEntries: 10 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
           {
             // Cache Bootstrap CSS from CDN
             urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/.*/i,
