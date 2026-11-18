@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthProvider";
 
 import "./Chatbot.css";
 import { SINGLE_DEPARTMENT_MODE } from "../config/features";
+import { FOLLOWUP_ASK, FOLLOWUP_ANSWER } from "../utils/formFollowup";
 /**
  * Formats RAG text to convert asterisks to bullet points, 
  * handles bolding, and nicely formats the "Sources:" section.
@@ -31,6 +32,8 @@ const Chatbot = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const getLodgeRoute = () => {
+    // Signed-out visitors file through the guest form on the login page
+    if (!user) return "/login?mode=guest";
     if (SINGLE_DEPARTMENT_MODE) return "/lodge-external";
     if (!userDetails?.user_type) return "/lodge-selection";
     switch (userDetails.user_type) {
@@ -65,6 +68,11 @@ const Chatbot = () => {
   
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  // A complaint form's follow-up question is waiting for an answer (utils/formFollowup.js).
+  // The next message goes back to the form instead of to the assistant, and isn't saved
+  // in the chat history.
+  const formQuestionRef = useRef(null);
+  const [formQuestionOpen, setFormQuestionOpen] = useState(false);
   const [listening, setListening] = useState(false);
   const [recordSecs, setRecordSecs] = useState(0);
   const [voiceError, setVoiceError] = useState('');
@@ -220,6 +228,22 @@ const Chatbot = () => {
     return () => window.removeEventListener('chatbot-open', handleChatbotOpen);
   }, []);
 
+  // A complaint form asks a follow-up question ({ question }) or just says something ({ message })
+  useEffect(() => {
+    const handleFormFollowup = (e) => {
+      const { question, message } = e.detail || {};
+      const text = question || message;
+      if (!text) return;
+      formQuestionRef.current = question || null;
+      setFormQuestionOpen(Boolean(question));
+      setMessages(prev => [...prev, { id: Date.now() + Math.random(), text, isBot: true, isFormFollowup: true }]);
+      setIsOpen(true);
+      setShowHint(false);
+    };
+    window.addEventListener(FOLLOWUP_ASK, handleFormFollowup);
+    return () => window.removeEventListener(FOLLOWUP_ASK, handleFormFollowup);
+  }, []);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
@@ -301,6 +325,17 @@ const Chatbot = () => {
     const trimmed = (text || '').trim();
     if (!trimmed || isSendingRef.current || isTyping) return;
 
+    // Answer to a complaint form's follow-up question: hand it to the form, nothing else
+    if (formQuestionRef.current) {
+      const question = formQuestionRef.current;
+      formQuestionRef.current = null;
+      setFormQuestionOpen(false);
+      setInputValue("");
+      setMessages(prev => [...prev, { id: Date.now(), text: trimmed, isBot: false }]);
+      window.dispatchEvent(new CustomEvent(FOLLOWUP_ANSWER, { detail: { question, answer: trimmed } }));
+      return;
+    }
+
     // Immediately acquire lock and update UI synchronously
     isSendingRef.current = true;
     setInputValue("");
@@ -308,8 +343,8 @@ const Chatbot = () => {
 
     let currentSessionId = sessionId;
 
-    // Create session if it doesn't exist
-    if (!currentSessionId) {
+    // Create session if it doesn't exist (guests have no saved chat history: it needs a login)
+    if (!currentSessionId && user) {
       try {
         const sessRes = await apiClient("/api/chat/session", { 
           method: "POST", 
@@ -571,8 +606,8 @@ const Chatbot = () => {
           {/* HEADER */}
           <div className="text-white p-3 d-flex justify-content-between align-items-center flex-shrink-0 chat-header">
             <div className="d-flex align-items-center gap-2">
-              <button 
-                className="btn btn-sm text-white p-0 border-0 shadow-none d-flex align-items-center justify-content-center me-1 chat-header-btn"
+              <button
+                className={`btn btn-sm text-white p-0 border-0 shadow-none d-flex align-items-center justify-content-center me-1 chat-header-btn${user ? "" : " d-none"}`}
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               >
                 <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path fillRule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/></svg>
@@ -762,7 +797,7 @@ Dept: {msg.department}
           </div>
 
           {/* HANDOFF BUTTON */}
-          {messages.length > 2 && !handoffResult && (
+          {user && messages.length > 2 && !handoffResult && (
             <div className="text-center py-2 border-top chat-footer-bar">
               <button
                 onClick={handleHandoff}
@@ -815,13 +850,13 @@ Dept: {msg.department}
                   <input
                     type="text"
                     className="form-control rounded-pill me-2 border-0 shadow-none px-4 chat-input"
-                    placeholder={isTranscribing ? "Transcribing audio..." : (t('chatbotPlaceholder') || "Type a message...")}
+                    placeholder={isTranscribing ? "Transcribing audio..." : formQuestionOpen ? "Type your answer for the complaint form..." : (t('chatbotPlaceholder') || "Type a message...")}
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={handleKeyDown}
                     disabled={isTyping || isTranscribing}
                   />
-                  <button type="button" className="btn btn-outline-secondary rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0 chat-mic-btn" onClick={startListening} disabled={!isSpeechSupported || isTyping || isTranscribing}>
+                  <button type="button" className={`btn btn-outline-secondary rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0 chat-mic-btn${user ? "" : " d-none"}`} onClick={startListening} disabled={!user || !isSpeechSupported || isTyping || isTranscribing}>
                     <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5z"/><path d="M10 8a2 2 0 1 1-4 0V3a2 2 0 1 1 4 0v5zM8 0a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V3a3 3 0 0 0-3-3z"/></svg>
                   </button>
                   <button 

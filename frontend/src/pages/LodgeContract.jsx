@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthProvider";
@@ -10,6 +10,8 @@ import ProjectPicker from "../components/ProjectPicker";
 import LowPriorityAnswer from "../components/LowPriorityAnswer";
 import { initialProject } from "../utils/projectSelection";
 import "./Lodge.css";
+import FollowupNotice from "../components/FollowupNotice";
+import { useFormFollowup } from "../utils/formFollowup";
 import { todayLocalISO } from "../utils/dates";
 import { apiErrorMessage } from "../utils/apiError";
 
@@ -23,7 +25,7 @@ function LodgeContract() {
   const [lowAnswer, setLowAnswer] = useState(null);
   const [queryRedirect, setQueryRedirect] = useState(null); // set when intent = Query or severity = Low/Policy
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { t } = useLanguage();
+  const { t, langCode } = useLanguage();
   const { user } = useAuth();
 
   const [formData, setFormData] = useState({
@@ -77,8 +79,27 @@ function LodgeContract() {
     }
   };
 
+  // Detail check before filing, like the chat's: missing details are asked in the
+  // chatbot popup and the answers added to the description (utils/formFollowup.js)
+  const formRef = useRef(null);
+  const setDescriptionText = useCallback((text) => setFormData((prev) => ({ ...prev, description: text })), []);
+  const followup = useFormFollowup({
+    getContext: () => ({
+      description: formData.description,
+      location: formData.workSiteLocation,
+      date: formData.incidentDate,
+      project: project?.name || null,
+      lang: langCode,
+    }),
+    setDescription: setDescriptionText,
+    // Complaints handed over from the chat were already checked there
+    skip: location.state?.source === "CHATBOT_ESCALATION",
+  });
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting || followup.status === "checking") return;
+    if (!(await followup.beforeSubmit())) return;
     setIsSubmitting(true);
     
     const stripEmojis = (str) =>
@@ -214,7 +235,7 @@ function LodgeContract() {
                 />
                 )}
 
-                <form onSubmit={handleSubmit} className={lowAnswer ? "d-none" : undefined}>
+                <form ref={formRef} onSubmit={handleSubmit} className={lowAnswer ? "d-none" : undefined}>
 
                   <div className="mb-3">
                     <label className="fw-semibold mb-1">{t("workerName")}</label>
@@ -256,7 +277,13 @@ function LodgeContract() {
                     </label>
                   </div>
 
-                  <button type="submit" disabled={isSubmitting} className="btn btn-danger w-100 py-2 fw-bold shadow-sm">
+                  <FollowupNotice
+                    status={followup.status}
+                    onOpenChat={followup.reopenChat}
+                    onFileWithout={() => { followup.fileWithout(); formRef.current?.requestSubmit(); }}
+                  />
+
+                  <button type="submit" disabled={isSubmitting || followup.status === "checking"} className="btn btn-danger w-100 py-2 fw-bold shadow-sm">
                     {isSubmitting ? "Submitting..." : t("submitGrievance")}
                   </button>
 

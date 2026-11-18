@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { resetApiClientState, apiClient } from "../services/api";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "../services/supabaseClient";
 import { useLanguage } from "../context/LanguageContext";
 import "./Auth.css";
@@ -24,7 +24,15 @@ const Auth = () => {
   const { t } = useLanguage();
 
   // Mode: "login" | "register" | "guest"
-  const [mode, setMode] = useState("login");
+  // ?mode=guest opens the guest form (the chatbot sends signed-out visitors there), also
+  // when it is used while this page is already open: a new navigation switches the tab.
+  const location = useLocation();
+  const [mode, setMode] = useState(() => (searchParams.get("mode") === "guest" ? "guest" : "login"));
+  const [seenNavigation, setSeenNavigation] = useState(location.key);
+  if (location.key !== seenNavigation) {
+    setSeenNavigation(location.key);
+    if (searchParams.get("mode") === "guest") setMode("guest");
+  }
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
   const [showPassword, setShowPassword] = useState(false);
@@ -691,7 +699,7 @@ const Auth = () => {
                 )}
 
                 {/* ────────────────── TAB 3: CONTINUE AS GUEST ────────────────── */}
-                {mode === "guest" && <GuestComplaintForm onLogin={() => switchMode("login")} />}
+                {mode === "guest" && <GuestComplaintForm key={location.key} onLogin={() => switchMode("login")} />}
 
               </div>
             </div>

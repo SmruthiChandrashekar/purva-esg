@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import FollowupNotice from "./FollowupNotice";
+import { useFormFollowup } from "../utils/formFollowup";
 import { useLanguage } from "../context/LanguageContext";
 import { API_BASE_URL } from "../services/supabaseClient";
 import ProjectPicker from "./ProjectPicker";
@@ -25,7 +27,26 @@ export default function GuestComplaintForm({ onLogin }) {
   const navigate = useNavigate();
   const { langCode } = useLanguage();
   const [project, setProject] = useState(() => initialProject(window.location.search));
-  const [data, setData] = useState(EMPTY);
+  const location = useLocation();
+  // A complaint handed over from the chatbot arrives with its description
+  const [data, setData] = useState(() => ({ ...EMPTY, description: location.state?.description || "" }));
+
+  // Detail check before filing, like the chat's: missing details are asked in the
+  // chatbot popup and the answers added to the description (utils/formFollowup.js)
+  const formRef = useRef(null);
+  const setDescriptionText = useCallback((text) => setData((prev) => ({ ...prev, description: text })), []);
+  const followup = useFormFollowup({
+    getContext: () => ({
+      description: data.description,
+      location: null,
+      date: data.date || null,
+      project: project?.name || null,
+      lang: langCode || "en",
+    }),
+    setDescription: setDescriptionText,
+    // Complaints handed over from the chat were already checked there
+    skip: location.state?.source === "CHATBOT_ESCALATION",
+  });
   const [step, setStep] = useState("form"); // form | answer | filed | resolved
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null); // { text, kind: "limit" | "error" }
@@ -80,12 +101,14 @@ export default function GuestComplaintForm({ onLogin }) {
     }
   };
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
+    if (busy || followup.status === "checking") return;
     if (data.description.trim().length < 10) {
       setError({ text: "Please describe what happened (at least 10 characters).", kind: "error" });
       return;
     }
+    if (!(await followup.beforeSubmit())) return;
     send(false);
   };
 
@@ -191,7 +214,7 @@ export default function GuestComplaintForm({ onLogin }) {
   }
 
   return (
-    <form onSubmit={submit} noValidate>
+    <form ref={formRef} onSubmit={submit} noValidate>
       <div className="mb-3">
         <h4 className="fw-bold mb-1 text-navy">File a complaint as a guest</h4>
         <p className="text-muted small mb-0">
@@ -274,7 +297,13 @@ export default function GuestComplaintForm({ onLogin }) {
 
       {errorBox}
 
-      <button type="submit" className="btn btn-danger w-100 py-2 fw-semibold" disabled={busy}>
+      <FollowupNotice
+        status={followup.status}
+        onOpenChat={followup.reopenChat}
+        onFileWithout={() => { followup.fileWithout(); formRef.current?.requestSubmit(); }}
+      />
+
+      <button type="submit" className="btn btn-danger w-100 py-2 fw-semibold" disabled={busy || followup.status === "checking"}>
         {busy ? "Submitting..." : "Submit complaint"}
       </button>
     </form>

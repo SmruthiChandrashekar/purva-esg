@@ -3,11 +3,9 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import Chatbot from "../components/Chatbot";
 import ScrollToTop from "../components/ScrollToTop";
-import { useAuth } from "../context/AuthProvider";
 
 function Layout({ children }) {
   const location = useLocation();
-  const { user } = useAuth();
   const isAssistantPage = location.pathname === "/assistant";
   return (
     // app-shell fills the screen and pushes the footer to the bottom, so pages don't need
@@ -20,7 +18,9 @@ function Layout({ children }) {
         {children}
       </main>
       {!isAssistantPage && <Footer />}
-      {!isAssistantPage && user && <Chatbot />}
+      {/* For everyone, guests included: guests get answers and the complaint form's
+          follow-up questions, without saved chat history (that needs a login) */}
+      {!isAssistantPage && <Chatbot />}
     </div>
   );
 }

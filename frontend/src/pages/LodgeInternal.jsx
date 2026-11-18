@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthProvider";
@@ -10,6 +10,8 @@ import ProjectPicker from "../components/ProjectPicker";
 import LowPriorityAnswer from "../components/LowPriorityAnswer";
 import { initialProject } from "../utils/projectSelection";
 import "./Lodge.css";
+import FollowupNotice from "../components/FollowupNotice";
+import { useFormFollowup } from "../utils/formFollowup";
 import { todayLocalISO } from "../utils/dates";
 import { apiErrorMessage } from "../utils/apiError";
 
@@ -77,8 +79,27 @@ function LodgeInternal() {
     }
   };
 
+  // Detail check before filing, like the chat's: missing details are asked in the
+  // chatbot popup and the answers added to the description (utils/formFollowup.js)
+  const formRef = useRef(null);
+  const setDescriptionText = useCallback((text) => setFormData((prev) => ({ ...prev, description: text })), []);
+  const followup = useFormFollowup({
+    getContext: () => ({
+      description: formData.description,
+      location: formData.department,
+      date: formData.incidentDate,
+      project: project?.name || null,
+      lang: langCode,
+    }),
+    setDescription: setDescriptionText,
+    // Complaints handed over from the chat were already checked there
+    skip: location.state?.source === "CHATBOT_ESCALATION",
+  });
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting || followup.status === "checking") return;
+    if (!(await followup.beforeSubmit())) return;
     setIsSubmitting(true);
 
     const stripEmojis = (str) =>
@@ -215,7 +236,7 @@ function LodgeInternal() {
                 />
                 )}
 
-                <form onSubmit={handleSubmit} className={lowAnswer ? "d-none" : undefined}>
+                <form ref={formRef} onSubmit={handleSubmit} className={lowAnswer ? "d-none" : undefined}>
                   <div className="row">
                     <div className="col-md-6 mb-3">
                       <label className="fw-semibold mb-1">{t("employeeId")}</label>
@@ -266,7 +287,13 @@ function LodgeInternal() {
                     </label>
                   </div>
 
-                  <button type="submit" disabled={isSubmitting} className="btn w-100 py-3 fw-bold shadow-sm text-white bg-navy lodge-submit-btn">
+                  <FollowupNotice
+                    status={followup.status}
+                    onOpenChat={followup.reopenChat}
+                    onFileWithout={() => { followup.fileWithout(); formRef.current?.requestSubmit(); }}
+                  />
+
+                  <button type="submit" disabled={isSubmitting || followup.status === "checking"} className="btn w-100 py-3 fw-bold shadow-sm text-white bg-navy lodge-submit-btn">
                     {isSubmitting ? "Submitting..." : t("submitGrievance")}
                   </button>
 

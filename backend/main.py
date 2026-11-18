@@ -62,6 +62,7 @@ from rag.rejection_advisor import evaluate_rejection_reason
 from backend.agent.graph import run_agent
 from backend.agent.nodes.classify_severity import classify_severity_node
 from backend.agent.nodes.classify_department import classify_department_node
+from backend.agent.nodes.check_context import check_context_node
 from backend.config.categories import SINGLE_DEPARTMENT
 from backend.database.grievance_state import load_grievance_state, save_grievance_state
 from backend.agent.nodes.router import determine_initial_route, chatbot_handoff_route, escalate, ESCALATION_CHAIN, TIER_SLA_HOURS
@@ -989,6 +990,82 @@ def get_dept_category_distribution(user: dict = Depends(require_super_admin)):
 async def root():
     return {"status": "ok", "message": "FastAPI backend is running!"}
 
+
+# ── Detail check for the complaint forms ────────────────────────────────
+class FormFollowup(BaseModel):
+    question: str = Field(..., max_length=1000)
+    answer: str = Field(..., max_length=2000)
+
+
+class CheckComplaintRequest(BaseModel):
+    description: str = Field(..., max_length=8000)
+    lang: str = "en"   # en | hi | kn
+    location: Optional[str] = Field(None, max_length=300)
+    date: Optional[str] = Field(None, max_length=40)
+    project: Optional[str] = Field(None, max_length=300)
+    # Follow-up questions already asked for this form, with the person's answers
+    followups: list[FormFollowup] = Field(default_factory=list, max_length=5)
+
+
+@app.post("/api/agents/check-complaint")
+async def check_complaint(request: CheckComplaintRequest):
+    """
+    The chat's detail check (check_context_node), run on a complaint form before it is filed:
+    is this a complaint with enough detail (what, where, when) for staff to act on? If not,
+    returns one follow-up question, which the website asks in the chatbot popup and adds,
+    with the answer, to the form.
+
+    Fields already filled in on the form count as detail. Earlier follow-ups are passed back
+    in as conversation history, so check_context_node's limit applies: after 2 questions the
+    form always goes through. Urgent reports (harassment, safety, bribery) are never held up.
+    Never blocks filing: if the check itself fails, the form is treated as complete.
+    No login (the guest form uses it too) and nothing is stored.
+    """
+    description = (request.description or "").strip()
+    if not description:
+        return {"sufficient": True, "intent": "GRIEVANCE", "question": ""}
+
+    lang = request.lang if request.lang in ("hi", "kn") else "en"
+
+    def to_en(text: str) -> str:
+        # translate_to_english always calls the translator, so skip it for English forms
+        return translate_to_english(text) if lang != "en" else text
+
+    def evaluate() -> dict:
+        facts = []
+        if request.project:
+            facts.append(f"Project: {request.project.strip()}")
+        if request.location:
+            facts.append(f"Location: {request.location.strip()}")
+        if request.date:
+            facts.append(f"Incident date: {request.date.strip()}")
+        complaint = to_en(description)
+        if facts:
+            complaint += "\n\nAlready given on the complaint form: " + "; ".join(facts) + "."
+
+        # The form as a conversation: the complaint, then each follow-up and its answer
+        history = [{"role": "user", "content": complaint}]
+        for f in request.followups:
+            history.append({"role": "assistant", "content": to_en(f.question)})
+            history.append({"role": "user", "content": to_en(f.answer)})
+        full_text = "\n".join(m["content"] for m in history if m["role"] == "user")
+        return check_context_node({"user_message": full_text, "messages": history})
+
+    try:
+        result = await asyncio.to_thread(evaluate)
+    except Exception as e:
+        logging.warning("Form detail check failed, letting the form through: %s", e)
+        return {"sufficient": True, "intent": "GRIEVANCE", "question": ""}
+
+    sufficient = bool(result.get("context_sufficient", True))
+    question = (result.get("clarification_question") or "").strip() if not sufficient else ""
+    if question and lang != "en":
+        question = translate_text(question, lang)
+    return {
+        "sufficient": sufficient,
+        "intent": result.get("intent", "GRIEVANCE"),
+        "question": question,
+    }
 
 @app.post("/api/agents/classify")
 def classify_complaint(request: ClassifyRequest, user: dict = Depends(get_current_user)):
