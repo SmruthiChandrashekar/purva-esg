@@ -9,7 +9,8 @@ const GUARD_MS = 30000;
 
 export function isNewVersionError(error) {
   const text = String(error?.message || error || "");
-  return /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Unable to preload CSS|Loading chunk \S+ failed/i.test(text);
+  // Chrome, Safari (two wordings, incl. getting HTML back instead of code), Firefox, Vite CSS
+  return /Failed to fetch dynamically imported module|Importing a module script failed|is not a valid JavaScript MIME type|Expected a JavaScript module script|error loading dynamically imported module|Unable to preload CSS|Loading chunk \S+ failed/i.test(text);
 }
 
 /** Reloads the page once. Returns false (and does nothing) if it already tried just now. */
