@@ -147,6 +147,13 @@ def _send_notifications(admin: dict, department: str, user_message: str, grievan
         admin_name = admin.get("name", "Admin")
 
         if admin_email:
+            # Link to the staff portal; FRONTEND_URL may list several sites, the first is the main one
+            base_url = (os.getenv("FRONTEND_URL") or "").split(",")[0].strip().rstrip("/")
+            if base_url:
+                portal_line = f"Open the Admin Portal to review and take action:\n{base_url}/admin/login\n\n"
+            else:
+                portal_line = "Please log in to the Admin Dashboard to review and take action.\n\n"
+
             subject = f"[HIGH SEVERITY] New {department} Grievance — {grievance_id}"
             body = (
                 f"Dear {admin_name},\n\n"
@@ -159,7 +166,7 @@ def _send_notifications(admin: dict, department: str, user_message: str, grievan
                 f"Department: {department}\n"
                 f"Severity: High\n"
                 f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                f"Please log in to the Admin Dashboard to review and take action.\n\n"
+                f"{portal_line}"
                 f"— Puravankara GRM System"
             )
             notifier.send_email(admin_email, subject, body)
