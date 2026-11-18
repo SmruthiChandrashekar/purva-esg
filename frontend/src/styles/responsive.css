@@ -132,6 +132,32 @@ body {
   gap: 8px;
 }
 
+/* Desktop: the logo keeps its size (it could shrink and slide under the links when a
+   super admin has extra links), and the links sit closer on smaller desktops */
+@media (min-width: 1200px) {
+  .site-navbar .navbar-brand { flex-shrink: 0; }
+  .nav-shell { flex-wrap: nowrap; }
+  .nav-menu-links > a,
+  .nav-menu-tail > * { white-space: nowrap; }
+}
+
+@media (min-width: 1200px) and (max-width: 1399.98px) {
+  .nav-menu-links > a.me-4,
+  .nav-menu-tail > .me-4,
+  .nav-menu-tail .me-3 { margin-right: 14px !important; }
+  .site-navbar .navbar-brand-logo { max-width: 150px; }
+  /* Account shows as just the avatar here (the name is in the profile page) */
+  .nav-profile-link > span:not(.rounded-circle) { display: none; }
+  .nav-profile-link > img,
+  .nav-profile-link > div { margin-right: 0 !important; }
+  .nav-lang-select { width: auto; min-width: 0; }
+}
+
+@media (min-width: 1200px) and (max-width: 1279.98px) {
+  .site-navbar .navbar-brand-logo { max-width: 130px; }
+  .nav-menu-links > a.me-4 { margin-right: 10px !important; }
+}
+
 /* Space between the quick buttons and the menu button on collapsed widths */
 @media (max-width: 1199.98px) {
   .nav-shell { gap: 8px !important; }
@@ -354,6 +380,170 @@ textarea.form-control {
 .card-body:has(> .table) {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* ── Complaint lists become cards below 1200px ────────────────────────────────
+   A 9-column table on a phone meant scrolling sideways and IDs wrapping one character
+   per line, and tablets still scrolled. Below 1200px each complaint is a card (two per
+   row on tablets); desktops keep the table. */
+
+@media (max-width: 1199.98px) {
+  .complaints-table,
+  .my-complaints-table {
+    display: block;
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  .complaints-table thead,
+  .my-complaints-table thead {
+    display: none;
+  }
+
+  .complaints-table tbody,
+  .my-complaints-table tbody {
+    display: block;
+  }
+
+  /* The wrapper no longer needs to scroll sideways */
+  .table-responsive:has(> .complaints-table),
+  .table-responsive:has(> .my-complaints-table) {
+    overflow: visible;
+  }
+
+  .complaints-table td,
+  .my-complaints-table td {
+    display: block;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  /* Admin complaints list: ID and status on top, then category, description, badges, date */
+  .complaints-table tr,
+  .my-complaints-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+  }
+
+  .complaints-table tr:last-child,
+  .my-complaints-table tr:last-child {
+    border-bottom: 0;
+  }
+
+  .ct-id { order: 1; flex: 1 1 auto; font-size: 14px; white-space: nowrap; }
+  .ct-status { order: 2; flex: 0 0 auto; }
+  .ct-cat { order: 3; flex: 1 1 100%; font-size: 15px !important; }
+  .ct-dept { order: 4; }
+  .ct-sev { order: 5; }
+  .ct-tier { order: 6; }
+  .ct-sla { order: 7; }
+  .ct-desc {
+    order: 8;
+    flex: 1 1 100%;
+    max-width: none !important;
+    white-space: normal !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+  .ct-date { order: 9; flex: 1 1 100%; font-size: 12px !important; }
+  .ct-go { display: none !important; }
+
+  /* Badge stacks inside a cell sit in one row on a card */
+  .ct-tier > div,
+  .ct-sla > div {
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    align-items: center !important;
+  }
+
+  /* Citizen dashboard list: ID and status, category and level, description, button */
+  .mc-id { order: 1; flex: 1 1 auto; white-space: nowrap; }
+  .mc-status { order: 2; flex: 0 0 auto; }
+  .mc-cat { order: 3; flex: 1 1 100%; font-weight: 600; color: var(--text); }
+  .mc-level { order: 4; }
+  .mc-date { order: 5; font-size: 12px; }
+  .mc-desc { order: 6; flex: 1 1 100%; max-width: none !important; white-space: normal !important; }
+  .mc-action { order: 7; flex: 1 1 100%; }
+  .mc-action .btn { width: 100%; }
+
+}
+
+
+/* Tablets: two complaint cards per row */
+@media (min-width: 768px) and (max-width: 1199.98px) {
+  .complaints-table tbody,
+  .my-complaints-table tbody {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 12px;
+  }
+  .complaints-table tr,
+  .my-complaints-table tr {
+    border: 1px solid var(--line) !important;
+    border-radius: var(--r-md);
+    align-content: flex-start;
+  }
+  .complaints-table tr:last-child,
+  .my-complaints-table tr:last-child {
+    border-bottom: 1px solid var(--line) !important;
+  }
+}
+
+/* Other tables (staff list, audit log): a card of "Label  value" lines on phones */
+@media (max-width: 767.98px) {
+  .table-stack,
+  .table-stack tbody {
+    display: block;
+    width: 100%;
+    margin-bottom: 0;
+  }
+  .table-stack thead { display: none; }
+  .table-responsive:has(> .table-stack) { overflow: visible; }
+  /* Any other table marked table-stack: each row a card of "Label  value" lines */
+  .table-stack tr {
+    display: block;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .table-stack td {
+    display: flex;
+    border: 0 !important;
+    background: transparent !important;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 0 !important;
+    text-align: right !important;
+    overflow-wrap: anywhere;
+  }
+  .table-stack td[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .table-stack td.ts-action {
+    justify-content: flex-end;
+    padding-top: 8px !important;
+  }
+  .table-stack td[colspan] {
+    display: block;
+    text-align: center !important;
+  }
 }
 
 /* ── Footer ─────────────────────────────────────────────────────────────── */

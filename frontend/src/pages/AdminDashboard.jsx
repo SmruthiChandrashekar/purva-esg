@@ -1448,7 +1448,7 @@ ${ragRecommendation.compliance_notes || ""}`;
             </div>
           ) : (
             <div className="table-responsive">
-              <table className="table table-hover align-middle mb-0">
+              <table className="table table-hover align-middle mb-0 complaints-table">
                 <thead className="table-light">
                   <tr>
                     <th className="text-muted py-3 ps-4 fs-12">ID</th>
@@ -1472,11 +1472,11 @@ ${ragRecommendation.compliance_notes || ""}`;
                       onClick={() => setSelectedTicket(g)}
                       className="admin-table-row"
                     >
-                      <td className="fw-bold ps-4 admin-ticket-id">
+                      <td className="fw-bold ps-4 admin-ticket-id ct-id" data-label="ID">
                         #{g.grievance_id.substring(0, 8)}
                       </td>
                       {isSuperAdmin && (
-                        <td>
+                        <td className="ct-dept" data-label="Department">
                           <span className="badge rounded-pill fw-semibold" style={{
                             backgroundColor: isDark ? "rgba(255, 255, 255, 0.08)" : "#f1f5f9",
                             color: isDark ? "#e4e4e7" : "#1e293b",
@@ -1487,16 +1487,17 @@ ${ragRecommendation.compliance_notes || ""}`;
                           </span>
                         </td>
                       )}
-                      <td className="fw-semibold fs-13 admin-cell-heading">{g.category}</td>
-                      <td>{getSeverityBadge(g.severity)}</td>
+                      <td className="fw-semibold fs-13 admin-cell-heading ct-cat" data-label="Category">{g.category}</td>
+                      <td className="ct-sev" data-label="Severity">{getSeverityBadge(g.severity)}</td>
                       <td
-                        className="overflow-hidden text-nowrap fs-13 admin-cell-desc"
+                        className="overflow-hidden text-nowrap fs-13 admin-cell-desc ct-desc"
+                        data-label="Description"
                       >
                         {translating
                           ? <span className="spinner-border spinner-border-sm text-secondary" role="status" />
                           : g.description}
                       </td>
-                      <td>
+                      <td className="ct-tier" data-label="Tier">
                         <div className="d-flex flex-column align-items-start gap-1">
                           {getTierBadge(g.assigned_tier)}
                           {(() => {
@@ -1530,7 +1531,7 @@ ${ragRecommendation.compliance_notes || ""}`;
                           })()}
                         </div>
                       </td>
-                      <td>
+                      <td className="ct-sla" data-label="SLA">
                         {(() => {
                           const sla = getSlaStatus(g);
                           if (!sla) return <span className="text-theme-muted fs-12">—</span>;
@@ -1541,11 +1542,11 @@ ${ragRecommendation.compliance_notes || ""}`;
                           );
                         })()}
                       </td>
-                      <td className="text-muted fs-13">
+                      <td className="text-muted fs-13 ct-date" data-label="Submitted">
                         {new Date(g.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
                       </td>
-                      <td>{getStatusBadge(g.status)}</td>
-                      <td className="pe-4 text-end">
+                      <td className="ct-status" data-label="Status">{getStatusBadge(g.status)}</td>
+                      <td className="pe-4 text-end ct-go" aria-hidden="true">
                         <svg className="text-theme-muted" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                           <path d="M9 18l6-6-6-6"/>
                         </svg>

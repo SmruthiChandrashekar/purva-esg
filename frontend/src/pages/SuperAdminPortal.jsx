@@ -156,7 +156,7 @@ const SuperAdminPortal = () => {
         <div className="card shadow-sm border-0 rounded-4">
           <div className="card-body p-0">
             <div className="table-responsive">
-              <table className="table table-hover align-middle mb-0">
+              <table className="table table-hover align-middle mb-0 table-stack">
                 <thead className="table-light">
                   <tr>
                     <th className="px-4 py-3">Name</th>
@@ -174,17 +174,17 @@ const SuperAdminPortal = () => {
                     </tr>
                   ) : users.map(u => (
                     <tr key={u.user_id}>
-                      <td className="px-4 fw-medium">{u.name}</td>
-                      <td>{u.email}</td>
-                      <td>
+                      <td className="px-4 fw-medium" data-label="Name">{u.name}</td>
+                      <td data-label="Email">{u.email}</td>
+                      <td data-label="Role">
                         <span className={`badge ${
                           u.role === 'super_admin' ? 'bg-danger' : 'bg-primary'
                         }`}>
                           {u.role.replace('_', ' ').toUpperCase()}
                         </span>
                       </td>
-                      <td>{u.department || "-"}{u.admin_tier ? ` · ${u.admin_tier}` : ""}</td>
-                      <td className="text-center">
+                      <td data-label="Department">{u.department || "-"}{u.admin_tier ? ` · ${u.admin_tier}` : ""}</td>
+                      <td className="text-center" data-label="Status">
                         {!u.is_active ? (
                           <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary">Deactivated</span>
                         ) : u.invite_pending ? (
@@ -193,7 +193,7 @@ const SuperAdminPortal = () => {
                           <span className="badge bg-success bg-opacity-10 text-success border border-success">Active</span>
                         )}
                       </td>
-                      <td className="px-4 text-end text-nowrap">
+                      <td className="px-4 text-end text-nowrap ts-action">
                         {u.is_active && (
                           <button
                             className="btn btn-sm btn-outline-secondary me-2"
@@ -222,7 +222,7 @@ const SuperAdminPortal = () => {
         <div className="card shadow-sm border-0 rounded-4">
           <div className="card-body p-0">
             <div className="table-responsive">
-              <table className="table table-hover align-middle mb-0">
+              <table className="table table-hover align-middle mb-0 table-stack">
                 <thead className="table-light">
                   <tr>
                     <th className="px-4 py-3">Timestamp</th>
@@ -238,13 +238,13 @@ const SuperAdminPortal = () => {
                     </tr>
                   ) : logs.map(log => (
                     <tr key={log.log_id}>
-                      <td className="px-4 text-muted small">{new Date(log.created_at).toLocaleString()}</td>
-                      <td><span className="fw-semibold text-navy">{log.action}</span></td>
-                      <td>
+                      <td className="px-4 text-muted small" data-label="When">{new Date(log.created_at).toLocaleString()}</td>
+                      <td data-label="Action"><span className="fw-semibold text-navy">{log.action}</span></td>
+                      <td data-label="Actor">
                         <div className="fw-medium">{log.actor_name}</div>
                         <div className="small text-muted">{log.actor_role}</div>
                       </td>
-                      <td>{log.target_email || "-"}</td>
+                      <td data-label="Target">{log.target_email || "-"}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -249,7 +249,7 @@ function Dashboard() {
               </div>
             ) : (
               <div className="table-responsive">
-                <table className="table table-hover align-middle">
+                <table className="table table-hover align-middle my-complaints-table">
                   <thead className="table-light">
                     <tr>
                       <th scope="col" className="text-muted small">{t("trackingId")}</th>
@@ -264,16 +264,16 @@ function Dashboard() {
                   <tbody>
                     {(translating ? grievances : translatedGrievances).map((g) => (
                       <tr key={g.grievance_id}>
-                        <td className="fw-bold dash-cell">#{g.grievance_id.substring(0, 5)}</td>
-                        {!SINGLE_DEPARTMENT_MODE && <td className="dash-cell">{g.category}</td>}
-                        {!SINGLE_DEPARTMENT_MODE && <td>
+                        <td className="fw-bold dash-cell mc-id" data-label="Tracking ID">#{g.grievance_id.substring(0, 5)}</td>
+                        {!SINGLE_DEPARTMENT_MODE && <td className="dash-cell mc-cat" data-label="Category">{g.category}</td>}
+                        {!SINGLE_DEPARTMENT_MODE && <td className="mc-level" data-label="Level">
                           <span 
                             className={`badge px-2 py-1 fw-semibold fs-11 dash-level-badge${g.assigned_tier === "L2" || g.severity === "High" ? " is-elevated" : ""}`}
                           >
                             {g.assigned_tier ? `Level ${g.assigned_tier.replace("L", "")}` : (g.severity === "High" ? "Level 2" : "Level 1")}
                           </span>
                         </td>}
-                        <td className="text-muted dash-desc-cell">
+                        <td className="text-muted dash-desc-cell mc-desc" data-label="Description">
                           {translating ? (
                             <span className="spinner-border spinner-border-sm text-secondary" role="status" />
                           ) : (
@@ -295,15 +295,15 @@ function Dashboard() {
                             )}
                           </div>
                         </td>
-                        <td className="text-muted">
+                        <td className="text-muted mc-date" data-label="Submitted">
                           {new Date(g.created_at).toLocaleDateString()}
                         </td>
-                        <td>
+                        <td className="mc-status" data-label="Status">
                           <span className={`badge px-3 py-2 rounded-pill shadow-sm ${getBadgeClass(g.status)}`}>
                             {getStatusLabel(g.status)}
                           </span>
                         </td>
-                        <td>
+                        <td className="mc-action">
                           <button 
                             className="btn btn-sm btn-outline-secondary px-3" 
                             onClick={() => navigate("/track", { state: { trackingId: g.grievance_id } })}
