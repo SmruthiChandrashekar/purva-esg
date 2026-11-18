@@ -11,6 +11,8 @@ If credentials are not configured, notifications are logged to console
 """
 
 import os
+import re
+import html
 import logging
 import smtplib
 from email.mime.text import MIMEText
@@ -18,6 +20,31 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
 logger = logging.getLogger("escalation.notifier")
+
+_URL_RE = re.compile(r"https?://[^\s<>\"]+")
+
+
+def _text_to_html(body: str) -> str:
+    """
+    The plain-text body as simple HTML, with each web address as a link whose
+    visible text is the address itself. Brevo's click tracking rewrites links in
+    plain-text emails into long tracking URLs that the reader sees; in HTML only
+    the link target is rewritten, so the reader still sees the real address.
+    """
+    def link(m):
+        url = m.group(0)
+        # Don't swallow an escaped quote or sentence punctuation that follows the address
+        url = re.split(r"&quot;|&#x27;", url)[0]
+        trail = len(url) - len(url.rstrip(".,;:!?)"))
+        url, rest = (url[:-trail], url[-trail:]) if trail else (url, "")
+        return f'<a href="{url}">{url}</a>{rest}' + m.group(0)[len(url) + len(rest):]
+
+    escaped = html.escape(body)
+    linked = _URL_RE.sub(link, escaped)
+    return (
+        '<div style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; '
+        f'line-height: 1.5; white-space: pre-wrap;">{linked}</div>'
+    )
 
 
 class Notifier:
@@ -80,6 +107,7 @@ class Notifier:
                         "to": [{"email": recipient}],
                         "subject": subject,
                         "textContent": body,
+                        "htmlContent": _text_to_html(body),
                     },
                     timeout=20,
                 )
