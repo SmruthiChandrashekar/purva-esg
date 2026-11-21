@@ -7,7 +7,6 @@ import { useAuth } from "../context/AuthProvider";
 import "./Chatbot.css";
 import { SINGLE_DEPARTMENT_MODE } from "../config/features";
 import { FOLLOWUP_ASK, FOLLOWUP_ANSWER } from "../utils/formFollowup";
-import SafetyBadge from "./SafetyBadge";
 /**
  * Formats RAG text to convert asterisks to bullet points, 
  * handles bolding, and nicely formats the "Sources:" section.
@@ -294,7 +293,6 @@ const Chatbot = () => {
               source_type: meta.source_type || 'GENERAL_KNOWLEDGE',
               policy_name: meta.policy_name || '',
               intent: meta.intent || '',
-              safety_category: meta.safety_category || '',
               original_query: meta.original_query || '',
               escalation_token: meta.escalation_token || null
             };
@@ -402,8 +400,6 @@ const Chatbot = () => {
         text: responseText,
         isBot: true,
         severity: data.severity ? data.severity.toLowerCase() : '',
-        // Set when the safety gate answered with a fixed reply (shows a badge)
-        safety_category: data.safety_category && data.safety_category !== 'SAFE' ? data.safety_category : '',
         department: data.department || '',
         routed: data.routed || false,
         grievance_id: data.grievance_id || '',
@@ -442,7 +438,6 @@ const Chatbot = () => {
               source_type: botMsg.source_type,
               policy_name: botMsg.policy_name,
               intent: botMsg.intent,
-              safety_category: botMsg.safety_category,
               original_query: botMsg.original_query,
               escalation_token: botMsg.escalation_token
             }
@@ -667,7 +662,6 @@ const Chatbot = () => {
                     t('chatbotGreeting') || "Hi! I'm the Policy Assistant. How can I help you today?"
                   ) : msg.isBot ? (
                     <>
-                      {msg.safety_category && <SafetyBadge category={msg.safety_category} />}
                       <div dangerouslySetInnerHTML={formatBotMessage(msg.text)} />
 
                       {/* TRIGGER GRIEVANCE FORM CARD FOR HIGH / MEDIUM COMPLAINTS */}

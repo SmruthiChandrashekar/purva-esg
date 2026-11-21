@@ -63,7 +63,6 @@ from backend.agent.graph import run_agent
 from backend.agent.nodes.classify_severity import classify_severity_node
 from backend.agent.nodes.classify_department import classify_department_node
 from backend.agent.nodes.check_context import check_context_node
-from backend.agent.safety import check_message as safety_check_message, HARMFUL_INTENT, SAFE as SAFETY_SAFE
 from backend.config.categories import SINGLE_DEPARTMENT
 from backend.database.grievance_state import load_grievance_state, save_grievance_state
 from backend.agent.nodes.router import determine_initial_route, chatbot_handoff_route, escalate, ESCALATION_CHAIN, TIER_SLA_HOURS
@@ -1068,26 +1067,6 @@ async def check_complaint(request: CheckComplaintRequest):
         "question": question,
     }
 
-def _apply_form_safety(text: str, severity: str) -> str:
-    """
-    Safety gate for complaint forms. A form is never refused or dropped (a real complaint
-    must not be lost), but a message where the writer asks for or announces harm
-    themselves must not page staff as HIGH: it is filed as Medium for a person to review.
-    """
-    try:
-        result = safety_check_message(text)
-    except Exception as e:
-        logging.warning("Form safety check failed: %s", e)
-        return severity
-    if result["label"] == HARMFUL_INTENT and severity.lower() in ("high", "critical"):
-        logging.warning("SAFETY: form text flagged %s (%s); severity %s capped to Medium for human review",
-                        result["label"], result["reason"], severity)
-        return "Medium"
-    if result["label"] != SAFETY_SAFE:
-        logging.warning("SAFETY: form text flagged %s (%s); filed normally", result["label"], result["reason"])
-    return severity
-
-
 @app.post("/api/agents/classify")
 def classify_complaint(request: ClassifyRequest, user: dict = Depends(get_current_user)):
     try:
@@ -1108,7 +1087,6 @@ def classify_complaint(request: ClassifyRequest, user: dict = Depends(get_curren
 
         severity = sev_res.get("severity", "LOW").capitalize()
         category = dept_res.get("department", "CRM")
-        severity = _apply_form_safety(text, severity)
 
         return {
             "intent": "Complaint",
@@ -1216,20 +1194,12 @@ async def chat_with_agent(request: ChatRequest):
             trigger_form = True
             form_reason = "unresolved_low_query"
 
-        # Safety gate result: anything but SAFE got a fixed reply and must not open a form
-        safety_category = agent_result.get("safety_category", "") or ""
-        blocked = bool(safety_category) and safety_category != SAFETY_SAFE
-        if blocked:
-            trigger_form, form_reason = False, ""
-
         return {
             "response": final_response,
             # Signed record of this triage, so "Open Grievance Form" can file with it
-            # (none for messages the safety gate stopped)
-            "escalation_token": None if blocked else make_escalation_token(
+            "escalation_token": make_escalation_token(
                 agent_result.get("severity", "") or "LOW", agent_result.get("department", "") or "", request.message
             ),
-            "safety_category": safety_category,
             "sources": agent_result.get("sources", []),
             "intent": intent_val,
             "source_type": source_type_val,
@@ -1383,8 +1353,6 @@ async def submit_complaint(request: SubmitComplaintRequest, user: dict = Depends
             dept_res = classify_department_node({"user_message": clean_desc_en})
             category = dept_res.get("department", "CRM")
             severity = sev_res.get("severity", "MEDIUM").capitalize()
-            # Same safety gate as the chat (a form must not be a way around it)
-            severity = _apply_form_safety(clean_desc_en, severity)
             if sev_res.get("classification_failed"):
                 # The AI could not triage this (rate limit, outage, bad reply). Its LOW is
                 # only a fallback, and LOW form submissions are not stored, so file it as

@@ -106,7 +106,3 @@ class GrievanceState(TypedDict, total=False):
     next_question: str
     status: str
     active_grievance: bool
-
-    # Safety gate (backend/agent/safety.py): SAFE, HARMFUL_INTENT, CRISIS, INJECTION, ABUSE, OUT_OF_SCOPE
-    safety_category: str
-    safety_reason: str

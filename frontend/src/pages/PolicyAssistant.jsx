@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthProvider';
 import { apiClient } from '../services/api';
 import "./PolicyAssistant.css";
 import { SINGLE_DEPARTMENT_MODE } from "../config/features";
-import SafetyBadge from "../components/SafetyBadge";
 
 /**
  * Formats RAG text: bold, bullets, source citations.
@@ -111,7 +110,6 @@ function PolicyAssistant() {
               source_type: meta.source_type || 'GENERAL_KNOWLEDGE',
               policy_name: meta.policy_name || '',
               intent: meta.intent || '',
-              safety_category: meta.safety_category || '',
               condensed_message: meta.condensed_message || '',
               original_query: meta.original_query || '',
               escalation_token: meta.escalation_token || null
@@ -300,8 +298,6 @@ function PolicyAssistant() {
         text: responseText,
         isBot: true,
         severity: data.severity ? data.severity.toLowerCase() : '',
-        // Set when the safety gate answered with a fixed reply (shows a badge)
-        safety_category: data.safety_category && data.safety_category !== 'SAFE' ? data.safety_category : '',
         department: data.department || '',
         routed: data.routed || false,
         grievance_id: data.grievance_id || '',
@@ -339,7 +335,6 @@ function PolicyAssistant() {
               source_type: botMsg.source_type,
               policy_name: botMsg.policy_name,
               intent: botMsg.intent,
-              safety_category: botMsg.safety_category,
               condensed_message: botMsg.condensed_message,
               original_query: botMsg.original_query,
               escalation_token: botMsg.escalation_token
@@ -632,7 +627,6 @@ function PolicyAssistant() {
                   t('chatbotGreeting') || `Hi${userDetails?.name ? ` ${userDetails.name.split(' ')[0]}` : ''}! I'm Purva, your AI Grievance Companion. How can I help you today?`
                 ) : msg.isBot ? (
                   <>
-                    {msg.safety_category && <SafetyBadge category={msg.safety_category} />}
                     <div dangerouslySetInnerHTML={formatBotMessage(msg.text)} />
                     {msg.routed && msg.department && !SINGLE_DEPARTMENT_MODE && (
                       <div className={`pa-routing-badge ${(msg.severity || 'high').toLowerCase() === 'medium' ? 'medium' : 'high'}`}>

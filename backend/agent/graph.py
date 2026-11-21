@@ -24,7 +24,6 @@ from backend.agent.nodes.classify_department import classify_department_node
 from backend.agent.nodes.retrieve import retrieve_node
 from backend.agent.nodes.generate_response import generate_response_node
 from backend.agent.nodes.department_router import department_route_node
-from backend.agent.safety import safety_gate_node, route_after_safety
 from backend.agent.edges.routing import (
     route_after_context_check,
     route_after_severity,
@@ -42,8 +41,6 @@ def build_graph() -> StateGraph:
     Graph topology:
         START
           ↓
-        safety_gate (harmful intent / crisis / injection / abuse / off-topic → fixed reply → END)
-          ↓ SAFE
         condense_query (rewrites multi-turn follow-up into standalone statement)
           ↓
         check_context
@@ -58,8 +55,6 @@ def build_graph() -> StateGraph:
     graph = StateGraph(GrievanceState)
 
     # ── Add Nodes ─────────────────────────────────────────────────────────
-    # Safety gate runs first on every message (see backend/agent/safety.py)
-    graph.add_node("safety_gate", safety_gate_node)
     graph.add_node("condense_query", condense_query_node)
     graph.add_node("check_context", check_context_node)
     graph.add_node("ask_clarification", ask_clarification_node)
@@ -77,14 +72,7 @@ def build_graph() -> StateGraph:
     graph.add_node("dept_investors", department_route_node)
 
     # ── Entry Point ───────────────────────────────────────────────────────
-    graph.set_entry_point("safety_gate")
-    # Blocked messages (harmful intent, crisis, injection, abuse, off-topic) end here with a
-    # fixed reply: no triage, no severity, no complaint form.
-    graph.add_conditional_edges(
-        "safety_gate",
-        route_after_safety,
-        {"continue": "condense_query", "blocked": END},
-    )
+    graph.set_entry_point("condense_query")
     graph.add_edge("condense_query", "check_context")
 
     # ── Conditional Edges ─────────────────────────────────────────────────
@@ -201,8 +189,6 @@ def run_agent(
         "assigned_queue": "",
         "sla_hours": 0,
         "chatbot_resolved": True,
-        "safety_category": "",
-        "safety_reason": "",
     }
 
     try:
@@ -239,8 +225,6 @@ def run_agent(
             "assigned_queue": result.get("assigned_queue", ""),
             "sla_hours": result.get("sla_hours", 0),
             "chatbot_resolved": result.get("chatbot_resolved", True),
-            "safety_category": result.get("safety_category", ""),
-            "safety_reason": result.get("safety_reason", ""),
             "error": result.get("error", ""),
         }
 
